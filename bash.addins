@@ -883,12 +883,21 @@ ba_github="https://github.com/arrrtto/bash.addins/blob/main/bash.addins"
 mkdir -p /tmp
 echo "Checking GitHub for a newer version..."
 curl -s $ba_github > /tmp/ba.ver
-ba_githubversion=$(cat /tmp/ba.ver | grep -E "ba_version" | sed -n '1p' | grep -oP '\d+.\d+')
+ba_githubversion=$(cat /tmp/ba.ver | grep -oP 'ba_version=........' | grep -oP '\d+.\d+')
 rm /tmp/ba.ver
 # Compare the versions as arithmetic values...
 if [[ "$(printf '%s\n' "$ba_version" "$ba_githubversion" | sort -V | head -n 1)" != "$ba_githubversion" ]]; then
  echo "Newer version of the BASH addins library ($ba_githubversion) available on GitHub."
- echo "Do you want to install it now?"
+
+#echo "Do you want to install it now?"
+
+# The download and installation process should happen here:
+#ba_new="https://github.com/arrrtto/bash.addins/releases/download/somereleasefilehere"
+#echo "Downloading the .deb installation package for Treasure Chest from GitHub..."
+#cd /tmp && wget -q $ba_new && chmod +x /tmp/bash.addins && mv /tmp/bash.addins /home/$USER/bin/bash.addins
+#cd -
+#echo "Done!"
+
 fi
 if [[ $ba_githubversion == $ba_version ]]; then
  echo "You have the newest version already :)"
@@ -905,7 +914,7 @@ function ba_setup() {
 local bashrc_file="$HOME/.bashrc"
 local new_lines=$(cat <<EOF
 export PATH=\$PATH:/home/\$USER/bin
-source /home/\$USER/bin/bash.addins
+source bash.addins
 EOF
 )
 if ! grep -q "bash.addins" "$bashrc_file"; then    # Check if the lines already exist to avoid duplicates, and if not append the lines to .bashrc
@@ -941,8 +950,3 @@ echo "To display the current version, run:"
 echo "bash.addins version"
 echo
 fi
-
-
-
-
-
