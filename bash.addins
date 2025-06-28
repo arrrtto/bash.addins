@@ -12,7 +12,7 @@
 # ------------ INITIAL SETTINGS AND CHECKS ------------
 
 # Current version. This is to be used for version check processes and usually updated by Artto or some other contributors of this library file
-ba_version="1.00"
+ba_version="1.02"
 
 # Check the location where the bash.addins were executed from
 ba_running_folder="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -21,34 +21,117 @@ ba_running_folder="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ------------ ALIASES ------------ 
 
-alias ll='ls -alF'
-alias la='ls -A'
-alias l='ls -CF'
 alias cls='clear'
-alias setup='sudo dpkg -i'
+alias distro='cat /etc/os-release'
+alias grep='grep --color=auto'
 alias installdeb='sudo dpkg -i'
-alias update='sudo apt update && sudo apt -y upgrade'
-alias fixupdate='sudo apt install -f'
-alias findtext_insidefiles='grep -r $1'
-alias findfile='find . -print | grep -i $2'
 alias ipaddress_local="echo $(ifconfig | grep broadcast | awk '{print $2}')"
 alias ipaddress_public='wget https://ipinfo.io/ip -qO -'
-
+alias findfile='find . -print | grep -i $2'
+alias findtext_insidefiles='grep -r $1'
+alias fixupdate='sudo apt install -f'
+alias l='ls -CF'
+alias la='ls -A'
+alias ll='ls -alF'
+alias lsdir="find . -maxdepth 1 -type d | sort | sed 's/.\///g'"            # List only folders in the current folder/directory, sorted A-Z
+alias lsfiles="find . -maxdepth 1 -type f | sort | sed 's/.\///g'"            # List only files in the current folder/directory, sorted A-Z
+alias lsfolders='lsdir'
+alias mkdir='mkdir -p'                                                      # Create a folder only if it does not exist
+alias setup='sudo dpkg -i'
+alias update='sudo apt update && sudo apt -y upgrade'
 
 
 # ------------ GENERAL GNU / BASH ------------
 
 function showallfunctions() {
-ba_file=$(which bash.addins)
-cat $ba_file | grep -o 'function.*()' | awk '{print $2}' | sed 's/()//g' | grep -Ev "ba_" | sort
+# Lists all the custom functions that the bash.addins contains.
+local file=$(which bash.addins)
+local RED='\033[0;31m'      # for function names
+local LIGHT_GRAY='\033[0;37m'  # for comments
+local NC='\033[0m'          # no Color
+
+# Read the file and extract functions and comments
+awk -v red="$RED" -v gray="$LIGHT_GRAY" -v nc="$NC" '
+/^function/ {
+    func_name = $2;  # Get the function name
+    printf "%s%s%s\n", red, func_name, nc;  # Print the function name in red
+    getline;  # Move to the next line
+    while ($0 ~ /^#/) {  # While the line starts with #
+        printf "%s%s%s\n", gray, $0, nc;  # Print the comment line in light gray
+        getline;  # Move to the next line
+    }
+    print "";  # Print a blank line for separation
+}
+' "$file"
 }
 
+
+function showaliases() {
+cat $(which bash.addins) | grep -E "alias "
+}
+
+function reload() {
+source bash.addins
+}
 
 function all() {
 # Lists all files in the current folder (skips folders) as a raw list.
 # Example: ls | all
 while IFS= read -r file; do [[ -f "$file" ]] && echo "$file"; done
 }
+
+
+
+function freememory() {
+# Get memory information
+mem=$(free -h | grep Mem)
+swap=$(free -h | grep Swap)
+
+# Extract total and available memory values
+total_mem=$(echo $mem | awk '{print $2}' | sed 's/Gi/ GB/')
+available_mem=$(echo $mem | awk '{print $7}' | sed 's/Gi/ GB/')
+
+# Extract total and free swap values
+total_swap=$(echo $swap | awk '{print $2}' | sed 's/Gi/ GB/')
+free_swap=$(echo $swap | awk '{print $4}' | sed 's/Gi/ GB/')
+
+# Format and display the output
+echo "Available RAM: $available_mem of $total_mem" | sed_comma2dot
+echo "Available Swap: $free_swap of $total_swap" | sed_comma2dot
+}
+
+function freespace() {
+df -h | grep "^/" | grep -Ev "boot" | awk '{print "Free space on", $1":", $4"B"}'
+}
+
+
+function systeminfo() {
+local RED='\033[0;31m'
+local GREEN='\033[0;32m'
+local YELLOW='\033[0;33m'
+local BLUE='\033[0;34m'
+local NC='\033[0m' # No Color
+
+local cpu_model=$(lscpu | grep "Model name" | awk -F: '{print $2}' | xargs)
+local install_date=$(ls -ld / | awk '{print $7".", $6, $8}')
+local total_mem=$(free -h | grep Mem | awk '{print $2}' | sed 's/Gi/ GB/')
+local available_mem=$(free -h | grep Mem | awk '{print $7}' | sed 's/Gi/ GB/')
+local os_info=$(lsb_release -d | awk -F: '{print $2}' | xargs)
+local kernel_version=$(uname -r)
+local uptime_info=$(uptime -p)
+local hostname_info=$(hostname)
+
+echo -e "${BLUE}Operating System:${NC} $os_info"
+echo -e "${YELLOW}Installation Date:${NC} $install_date"
+echo -e "${YELLOW}Kernel Version:${NC} $kernel_version"
+echo -e "${YELLOW}Uptime:${NC} $uptime_info"
+echo -e "${YELLOW}Hostname:${NC} $hostname_info"
+echo -e "${GREEN}CPU Model:${NC} $cpu_model"
+echo -e "${GREEN}Total Memory:${NC} $total_mem | out of which $available_mem is available" | sed_comma2dot
+echo -e "${BLUE}Disks:${NC}"
+df -h | grep "^/" | grep -Ev "boot" | awk '{print $1" -", $2"B total", "|", $4"B free"}' | sed_comma2dot
+}
+
 
 
 function bigfiles() {
@@ -569,7 +652,7 @@ function exc() {
 }
 
 
-to_mp4() {
+function to_mp4() {
 if [[ $# -ne 1 ]]; then
 echo "For converting all inputted video files to mp4 videos with your custom bitrate."
 echo "Usage example for all mov files in current folder: ls *.mov | all | tomp4 3000"
@@ -593,7 +676,7 @@ echo "All conversions complete!"
 }
 
 
-to_gif() {
+function to_gif() {
 if [[ $# -ne 1 ]]; then
 echo "For converting inputted video file to GIF format."
 echo "Usage example: echo \"video file.mp4\" | togif"
@@ -607,7 +690,7 @@ done
 }
 
 
-to_png() {
+function to_png() {
 if [[ $# -ne 1 ]]; then
 echo "For converting inputted image file to PNG format."
 echo "Usage example: echo \"photo 1.jpg\" | topng"
@@ -620,7 +703,7 @@ done
 }
 
 
-to_jpg() {
+function to_jpg() {
 if [[ $# -ne 1 ]]; then
 echo "For converting inputted image file to JPG format."
 echo "Usage example: echo \"photo 1.png\" | tojpg"
@@ -633,7 +716,7 @@ done
 }
 
 
-to_jpg_from_HEIC() {
+function to_jpg_from_HEIC() {
 if [[ $# -ne 1 ]]; then
 echo "For converting inputted image file to JPG format."
 echo "Usage example: echo \"photo 1.png\" | tojpg"
@@ -758,7 +841,7 @@ tesseract "$1" "$1.txt" -l est
 replace_extension jpg.txt.txt txt
 }
 
-pdf2txt_OCR_allin() {
+function pdf2txt_OCR_allin() {
 while IFS= read -r file; do
 echo "Processing:" $file
 output="${file%.*}.txt"   # $output will have a replaced extension
@@ -768,7 +851,7 @@ done
 }
 
 
-OCR_recursively_alljpg2txt() {
+function OCR_recursively_alljpg2txt() {
 # creates .txt files of all found jpg files in current folder AND subfolders.
 find . -type f \( -iname '*.jpg' -o -iname '*.jpeg' \) | while IFS= read -r img; do
 txt="${img%.*}.txt"
@@ -782,7 +865,7 @@ done
 }
 
 
-resize50() {
+function resize50() {
 # For resizing all files in current folder and subfolders by -50% with overwriting method
 ext="$1"
 if [[ -z "$ext" ]]; then
@@ -874,7 +957,6 @@ curl -sX GET "https://tradeogre.com/api/v1/markets" | jq -r '.[]["QORT-USDT"].pr
 # ------------ VERSION CHECK / UPDATE ------------
 
 function ba_versioncheck() {
-ba_github="https://github.com/arrrtto/bash.addins/blob/main/bash.addins"
 # Check for a newer version of the library on GitHub
 # The version check could happen automatically on every first day of the month and notification come into Terminal about the update being available.
 # Or manually by running, with the option to auto-update (install automatically) by running "bash.addins update" - this should download the new version from GitHub,
@@ -882,7 +964,7 @@ ba_github="https://github.com/arrrtto/bash.addins/blob/main/bash.addins"
 # If there is a newer (higher) version number in GitHub compared to the one written into the current bash.addins file, then notify the user.
 mkdir -p /tmp
 echo "Checking GitHub for a newer version..."
-curl -s $ba_github > /tmp/ba.ver
+curl -s "https://github.com/arrrtto/bash.addins/blob/main/bash.addins" > /tmp/ba.ver
 ba_githubversion=$(cat /tmp/ba.ver | grep -oP 'ba_version=........' | grep -oP '\d+.\d+')
 rm /tmp/ba.ver
 # Compare the versions as arithmetic values...
@@ -892,11 +974,10 @@ if [[ "$(printf '%s\n' "$ba_version" "$ba_githubversion" | sort -V | head -n 1)"
 #echo "Do you want to install it now?"
 
 # The download and installation process should happen here:
-#ba_new="https://github.com/arrrtto/bash.addins/releases/download/somereleasefilehere"
-#echo "Downloading the .deb installation package for Treasure Chest from GitHub..."
-#cd /tmp && wget -q $ba_new && chmod +x /tmp/bash.addins && mv /tmp/bash.addins /home/$USER/bin/bash.addins
+#cd /tmp && wget -q "https://github.com/arrrtto/bash.addins/archive/refs/tags/$ba_githubversion.zip"
+#unzip $ba_githubversion.zip && mv /tmp/bash.addins-$ba_githubversion/bash.addins /home/$USER/bin/bash.addins && chmod +x /home/$USER/bin/bash.addins
 #cd -
-#echo "Done!"
+#echo "Downloaded, extracted and moved the newer version to /home/$USER/bin :)"
 
 fi
 if [[ $ba_githubversion == $ba_version ]]; then
