@@ -12,7 +12,7 @@
 # ------------ INITIAL SETTINGS AND CHECKS ------------
 
 # Current version. This is to be used for version check processes and usually updated by Artto or some other contributors of this library file
-ba_version="1.02"
+ba_version="1.03"
 
 # Check the location where the bash.addins were executed from
 ba_running_folder="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -1214,5 +1214,8 @@ echo "bash.addins version"
 echo
 echo "Once you have the library installed/loaded, you can see the list of functions with:"
 echo "showallfunctions"
+echo
+echo "and all alias commands with:"
+echo "showaliases"
 
 fi
