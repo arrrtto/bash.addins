@@ -38,22 +38,26 @@ alias lsfiles="find . -maxdepth 1 -type f | sort | sed 's/.\///g'"            # 
 alias lsfolders='lsdir'
 alias mkdir='mkdir -p'                                                      # Create a folder only if it does not exist
 alias setup='sudo dpkg -i'
+alias showfunctions='showallfunctions'
 alias update='sudo apt update && sudo apt -y upgrade'
+
 
 
 # ------------ GENERAL GNU / BASH ------------
 
 function showallfunctions() {
-# Lists all the custom functions that the bash.addins contains.
+# Lists all the functions that the bash.addins contains.
 local file=$(which bash.addins)
 local RED='\033[0;31m'      # for function names
 local LIGHT_GRAY='\033[0;37m'  # for comments
 local NC='\033[0m'          # no Color
 
-# Read the file and extract functions and comments
-awk -v red="$RED" -v gray="$LIGHT_GRAY" -v nc="$NC" '
+awk -v red="$RED" -v gray="$LIGHT_GRAY" -v nc="$NC" ' # Read the file and extract functions and comments
 /^function/ {
     func_name = $2;  # Get the function name
+    sub(/[(]/, "", func_name);  # Remove the ( from the function name
+    sub(/[)]/, "", func_name);  # Remove the ) from the function name
+    if (func_name ~ /^ba_/) next;  # Skip functions starting with "ba_"
     printf "%s%s%s\n", red, func_name, nc;  # Print the function name in red
     getline;  # Move to the next line
     while ($0 ~ /^#/) {  # While the line starts with #
@@ -67,23 +71,76 @@ awk -v red="$RED" -v gray="$LIGHT_GRAY" -v nc="$NC" '
 
 
 function showaliases() {
+# Lists all the aliases that the bash.addins contains.
 cat $(which bash.addins) | grep -E "alias "
 }
 
+function functions_amount(){
+# Outputs the number of all available functions.
+showallfunctions | grep -Ev "#" | sed_removeemptylines | wc -l
+}
+
 function reload() {
+# Reloads the BASH Add-ins library file by executing: source bash.addins
 source bash.addins
 }
 
 function all() {
-# Lists all files in the current folder (skips folders) as a raw list.
+# Lists all files in the current folder as a raw list, while skipping the folders.
 # Example: ls | all
 while IFS= read -r file; do [[ -f "$file" ]] && echo "$file"; done
 }
 
 
+function countdown_minutes() {
+# Counts down from a specified number of minutes, displaying the remaining time.
+# Example: countdown_minutes 5
+count=${1?No parameters given. Try countdown_minutes 5}
+(( ++count )) 
+while (( --count >= 0 )); do
+# using echo -ne and \r (carriage return) to overwrite the same line instead of printing a new one each time.
+# The extra spaces ("  ") at the end ensure the previous text is fully cleared when the number shrinks.
+  echo -ne "\r$count minutes left to wait.  "
+  sleep 60
+done
+echo ""  # Move to a new line after the loop finishes
+}
+
+
+function randomnumber {
+# Generates random number for you between your desired numbers, such as between 1 and 1500.
+# Example: randomnumber 5 250
+if [ -z "$1" ]; then
+echo "Generates random number for you between your desired numbers, such as between 1 and 1500."
+echo "Example usage: randomnumber 5 250"
+return 1
+fi
+local min=$1
+local max=$2
+expr $min + $RANDOM % $max
+}
+
+
+function whatnext() {
+# Waits for user input. Good to use after or before a certain process in a BASH script.
+read -p "Do you want to continue? (y/n): " choice
+case "$choice" in 
+  y|Y ) 
+    echo "Continuing...";;
+  n|N ) 
+    echo "Exiting..."
+    exit 1;;
+  * ) 
+    echo "Invalid input. Please enter y or n."
+    exit 1;;
+esac
+}
+
+
+# ------------ SYSTEM RELATED ------------
 
 function freememory() {
-# Get memory information
+# Shows RAM memory information.
 mem=$(free -h | grep Mem)
 swap=$(free -h | grep Swap)
 
@@ -100,12 +157,16 @@ echo "Available RAM: $available_mem of $total_mem" | sed_comma2dot
 echo "Available Swap: $free_swap of $total_swap" | sed_comma2dot
 }
 
+
 function freespace() {
+# Shows free (available) disk space.
 df -h | grep "^/" | grep -Ev "boot" | awk '{print "Free space on", $1":", $4"B"}'
 }
 
 
 function systeminfo() {
+# Displays comprehensive system information, including OS details, RAM memory, CPU and disk usage.
+clear
 local RED='\033[0;31m'
 local GREEN='\033[0;32m'
 local YELLOW='\033[0;33m'
@@ -117,12 +178,23 @@ local install_date=$(ls -ld / | awk '{print $7".", $6, $8}')
 local total_mem=$(free -h | grep Mem | awk '{print $2}' | sed 's/Gi/ GB/')
 local available_mem=$(free -h | grep Mem | awk '{print $7}' | sed 's/Gi/ GB/')
 local os_info=$(lsb_release -d | awk -F: '{print $2}' | xargs)
+local os_version=$(lsb_release -d | awk -F: '{print $2}' | xargs | sed_keep_price)
+local os_mint=$(lsb_release -d | grep -o 'Mint')
 local kernel_version=$(uname -r)
 local uptime_info=$(uptime -p)
 local hostname_info=$(hostname)
 
+curl -sX 'GET' "https://endoflife.date/api/v1/products/linuxmint" -H "accept: application/json" > /tmp/eolapi.json
+releases=() && while read -r r; do releases+=("$r"); done < <(jq -r '.result.releases[].name' /tmp/eolapi.json)
+counter="0"
+for version_number in ${releases[@]}; do
+ if [[ $version_number = $os_version ]]; then break; fi  # scan through the version numbers
+ counter=$((counter + 1))
+done
+
 echo -e "${BLUE}Operating System:${NC} $os_info"
 echo -e "${YELLOW}Installation Date:${NC} $install_date"
+if [[ $version_number != "" ]] && [[ $os_mint == "Mint" ]]; then echo -e "${YELLOW}End of Support:${NC}" $(jq -r ".result.releases["$counter"].eolFrom" /tmp/eolapi.json); fi
 echo -e "${YELLOW}Kernel Version:${NC} $kernel_version"
 echo -e "${YELLOW}Uptime:${NC} $uptime_info"
 echo -e "${YELLOW}Hostname:${NC} $hostname_info"
@@ -130,11 +202,16 @@ echo -e "${GREEN}CPU Model:${NC} $cpu_model"
 echo -e "${GREEN}Total Memory:${NC} $total_mem | out of which $available_mem is available" | sed_comma2dot
 echo -e "${BLUE}Disks:${NC}"
 df -h | grep "^/" | grep -Ev "boot" | awk '{print $1" -", $2"B total", "|", $4"B free"}' | sed_comma2dot
+echo
+echo
+if [[ -f /tmp/eolapi.json ]]; then rm /tmp/eolapi.json; fi  # delete the json file, if it exists
 }
 
 
-
 function bigfiles() {
+# Finds and lists files in the current folder and subfolders that exceed a specified size.
+# Example: bigfiles +1G
+# Example: bigfiles +200M
 if [ -z "$1" ]; then
 echo "Finds and lists you all files in the current folder and subfolders, with your set minimum size."
 echo "And it also sorts the list from the largest to smallest."
@@ -147,6 +224,8 @@ find . -type f -size "$1" -exec du -h {} + 2>/dev/null | sort -hr
 
 
 function replace_extension() {
+# Replaces the file extension of all files with a specified old extension to a new extension.
+# Example: replace_extension jpg.txt txt   ; that renames "jpg.txt" extension to "txt"
 old_ext="$1"
 new_ext="$2"
 if [[ -z "$old_ext" || -z "$new_ext" ]]; then
@@ -163,84 +242,46 @@ done
 
 
 function replace_spaces() {
+# Replaces spaces in filenames with underscores (_ characters) in a specified folder.
+# Example: replace_spaces ~/Downloads
 local folder=${1?No input given for the folder} # Check if the folder is empty
 if [ -z "$folder" ]; then return 0; fi  # Do nothing if no folder is provided
 folder="${folder%/}" # Normalize folder path by removing trailing slash if present. No need, but for perfection sake
-find "$folder/" -maxdepth 1 -type f -iname "*.*" | while IFS= read -r file; do
+find "$folder/" -maxdepth 1 -type f -iname "*" | while IFS= read -r file; do
 if [[ "$file" =~ \  ]]; then new_name="${file// /_}"; mv "$file" "$new_name"; fi
 done
 }
 
 
-function randomnumber {
-if [ -z "$1" ]; then
-echo "Generates random number for you between your desired numbers, such as between 1 and 1500."
-echo "Example usage: randomnumber 5 250"
-return 1
-fi
-local min=$1
-local max=$2
-expr $min + $RANDOM % $max
-}
-
-
-function whatnext() {
-# To wait for user input after or before a certain process in a BASH script
-read -p "Do you want to continue? (y/n): " choice
-case "$choice" in 
-  y|Y ) 
-    echo "Continuing...";;
-  n|N ) 
-    echo "Exiting..."
-    exit 1;;
-  * ) 
-    echo "Invalid input. Please enter y or n."
-    exit 1;;
-esac
-}
-
-
-function countdown_minutes() {
-# Count is passed as the 1st argument. Abort with error message, if not given.
-count=${1?No parameters given. Try countdown_minutes 5}
-(( ++count )) 
-while (( --count >= 0 )); do
-# using echo -ne and \r (carriage return) to overwrite the same line instead of printing a new one each time.
-# The extra spaces ("  ") at the end ensure the previous text is fully cleared when the number shrinks.
-  echo -ne "\r$count minutes left to wait.  "
-  sleep 60
-done
-echo ""  # Move to a new line after the loop finishes
-}
-
-
 function check_process() {
-# Example usage: check_process "chromium"  ----> echo "Chromium is running: $running"
-processis=$(get_running_apps | grep -Ei $1)
-if [[ -z $processis ]]; then
-running="False"
-echo $1 "process is not running."
+# Checks if a specified app (process) is running and outputs its status.
+# Example: check_process brave    ; outputs "'$process' is running."
+local process="$1"
+if pgrep -x "$process" > /dev/null; then
+  echo "$process is running"
 else
-running="True"
-echo $1 "process is running."
+  echo "$process is not running"
 fi
 }
 
 
 function kill_process() {
-# Ex.: kill_process chromium
+# Kills a specified process by name.
+# Example: kill_process chromium
 pid=$(pgrep -f $1) # Find the PID of the given process
 # Send a SIGTERM signal (graceful close)
 if [[ ! -z "$pid" ]]; then kill -SIGTERM "$pid"; fi
 }
 
 function kill_zombieprocesses_chromium(){
-# Kills/removes all the Chromium browser processes, including the zombie ones
+# Kills/removes all the Chromium browser processes, including the zombie ones.
 ps -eo pid,ppid,state,comm | awk '$3=="Z" && $4=="chromium" {print $2}' | sort -u | xargs -r kill -9
 }
 
 
 function wait4download() {
+# Waits for a download to complete by checking for .crdownload files in the Downloads folder.
+# Example: wait4download
 DOWNLOAD_DIR="/home/$USER/Downloads"
 tempfile=$(find "$DOWNLOAD_DIR" -name "*.crdownload" | head -n 1)    # Find the file with .crdownload extension (assuming only one active download)
 if [ -n "$tempfile" ]; then    # Check if the download process has started (i.e., a .crdownload file exists)
@@ -253,7 +294,7 @@ else
  echo "$finalfile cannot be found at all. Did it even get downloaded?"
 fi
 else
- echo "No .crdownload files found."
+ echo "No .crdownload files found, so possibly nothing is downloading to Downloads folder at the moment."
 fi
 }
 
@@ -262,20 +303,32 @@ fi
 # ------------ GUI APPS ------------
 
 function focus_window() {
+# Brings a selected app window to the front, making it the active window.
+# Example: focus_window chromium
 xdotool search --onlyvisible --class $1 windowactivate && sleep 1
 }
 
 function minimize_app() {
+# Minimizes a window of a specified application by name.
+# Example: minimize_app chromium
 xdotool search --name $1 windowminimize && sleep 1
 }
 
 function maximize_app() {
+# Maximizes a window of a specified application by name.
+# Example: maximize_app chromium
 xdotool search --name $1 windowactivate windowsize 100% 100% && sleep 1
 }
 
 function get_window_info() {
-# Get info about the active window
+# Gets info about the currently active window (application), including coordinates and size.
+# The output will be written and also put into variables x, y, width and height.
+# Good example: focus_window brave && get_window_info
 window_id=$(xdotool getactivewindow)
+xwininfo -id $window_id | awk '/Absolute upper-left X:/ { print "X: " $4 }'
+xwininfo -id $window_id | awk '/Absolute upper-left Y:/ { print "Y: " $4 }'
+xwininfo -id $window_id | awk '/Width:/ { print "Width: " $2 }'
+xwininfo -id $window_id | awk '/Height:/ { print "Height: " $2 }'
 x=$(xwininfo -id $window_id | awk '/Absolute upper-left X:/ { print $4 }')
 y=$(xwininfo -id $window_id | awk '/Absolute upper-left Y:/ { print $4 }')
 width=$(xwininfo -id $window_id | awk '/Width:/ { print $2 }')
@@ -283,112 +336,153 @@ height=$(xwininfo -id $window_id | awk '/Height:/ { print $2 }')
 }
 
 
-function screenshot_chromium() {
+function screenshot_window() {
+# Takes a screenshot of the active window and saves it to /home/$USER/Screenshots as 'scr_$date_time.png'
+# Example: screenshot_window firefox
 date_time=$(date +%d.%m.%Y-%H:%M)
-local output_file="/home/$USER/Screenshots/screenshot_chromium_$date_time.png"
-window_id=$(xdotool search --name --onlyvisible "Chromium" | head -n 1)
-if [ -z "$window_id" ]; then echo "Chromium is not open!"; return 1; fi
-xwd -id "$window_id" | convert xwd:- "$output_file" # Take a screenshot of the Chromium window and save it to /home/$USER/Screenshots folder
-echo "Screenshot saved to $output_file"
+local window=${1?Usage example: screenshot_window firefox}
+focus_window $window
+window_id=$(xdotool search --name --onlyvisible $window | head -n 1)
+if [ -z "$window_id" ]; then
+  echo "$window window not found or it is not open (the process is not running)."
+  return 1
+else
+  mkdir -p /home/$USER/Screenshots_$window
+  local output_file="/home/$USER/Screenshots_$window/scr_$date_time.png"
+  cd 
+  xwd -id "$window_id" | convert xwd:- "$output_file"
+  echo "Screenshot saved to $output_file"
+fi
 }
 
 
 
-# --------- RegEx -----------
-# HOW TO USE THESE FUNCTIONS:
-# With piping, of course!
-# As an example: somebunchoftext | regex_email
+# --------- REGULAR EXPRESSIONS (RegEx) -----------
+# HOW TO USE THESE FUNCTIONS? With piping, of course!
 
 function regex_email() {
-# example: get_page_source | regex_email
+# Extracts email addresses from input text.
+# Example: cat source.html | regex_email
 grep -E -o '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
 }
 
 function regex_links_https() {
+# Extracts all https links addresses from input text.
+# Example: cat source.html | regex_links_https
 grep -E -o 'https?://[a-zA-Z0-9./?=_-]+'
 }
 
 function regex_htmltag() {
-# Matches <div class="container"> and <img src="image.png" />
+# Matches HTML tags in input text, such as <div class="container"> and <img src="image.png" />
+# Example: cat index.html | regex_htmltag
 grep -E -o '<[a-zA-Z][a-zA-Z0-9]*[^>]*>'
 }
 
 function regex_ipaddress() {
+# Extracts IP addresses from input text.
+# Example: some_text | regex_ipaddress
 grep -E -o '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b'
 }
 
 function regex_price() {
-grep -E -o '[$€£₹¥]?[0-9]+([.,][0-9]{2})?'
+# Extracts price values from input text.
+# Example: echo "Cost: $456.68" | regex_price      ; outputs 456.68
+sed 's/[^0-9.]//g'
 }
 
 function regex_number() {
+# Extracts numeric values from input text.
+# Example: echo "Cost: $ 456.68" | regex_number    ; outputs 456 and 68 on separate lines
+# NB! Best to NOT use echo $456, because the first number after $ gets lost when using echo.
 grep -E -o '[0-9]+'
 }
 
 function regex_phonenumber() {
+# Extracts phone numbers from input text.
 grep -E -o '(\+?[0-9]{1,3}[-. ]?)?(\(?[0-9]{2,4}\)?[-. ]?)?[0-9]{3,4}[-. ][0-9]{3,4}'
 }
 
 function regex_date() {
-grep -E -o '\b([0-9]{2,4}[-/][0-9]{1,2}[-/][0-9]{1,4})\b'
+# Extracts various date formats like DD-MM-YYYY, YYYY/MM/DD, DD.MM.YYYY, etc.
+# Example: echo "Date: 14.05.2022" | regex_date → 14.05.2022
+grep -E -o '\b([0-9]{2,4})([./-])[0-9]{1,2}\2[0-9]{1,4}\b'
 }
 
+
 function regex_usernamehandle() {
+# Extracts usernames or handles, which start with @ from input text.
+# Example: echo "This is @my_user useraccount" | regex_usernamehandle
 grep -E -o '@[a-zA-Z0-9_]+'
 }
 
 function regex_hashtag() {
+# Extracts hashtags from input text.
+# Example: echo "This is #cool stuff" | regex_hashtag
 grep -E -o '#[a-zA-Z0-9_]+'
 }
 
 function regex_youtube_id() {
-# Matches: 
-# https://www.youtube.com/watch?v=dQw4w9WgXcQ → dQw4w9WgXcQ
-# https://youtu.be/abcd1234567 → abcd1234567
-grep -E -o '(?<=v=|vi=|be/|embed/|shorts/|/v/|/e/|/watch\?v=)[a-zA-Z0-9_-]{11}'
+# Extracts YouTube video ID from YouTube links.
+# Example: echo "https://www.youtube.com/watch?v=dQw4w9WgXcQ" | regex_youtube_id    ; → dQw4w9WgXcQ
+# Example: echo "https://youtu.be/abcd1234567" | regex_youtube_id    ; → abcd1234567
+sed -nE 's~.*(v=|vi=|be/|embed/|shorts/|/v/|/e/|watch\?v=)([a-zA-Z0-9_-]{11}).*~\2~p'
 }
 
 function regex_sha256() {
+# Extracts SHA-256 hashes from input text.
+# Example: some_text | regex_sha256
 grep -E -o '\b[a-fA-F0-9]{64}\b'
 }
 
 function regex_bitcoin() {
+# Extracts Bitcoin addresses from input text.
+# Example: some_text | regex_bitcoin
 grep -E -o '\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b'
 }
 
 function regex_uuid() {
+# Extracts UUIDs from input text.
+# Example: some_text | regex_uuid
 grep -E -o '\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b'
 }
 
 function regex_sql() {
+# Extracts SQL commands from input text.
+# Example: some_text | regex_sql
 grep -E -o '\b(SELECT|INSERT|UPDATE|DELETE)\b[^;]+;'
 }
 
 
 function sed_comma2dot() {
+# Replaces commas with dots in input text.
+# Example: echo "1,23" | sed_comma2dot
 sed 's/,/./g'
 }
 
 function sed_dot2comma() {
+# Replaces dots with commas in input text.
+# Example: echo "1.23" | sed_dot2comma    ; result: 1,23
 sed 's/./,/g'
 }
 
 function sed_space_removeextra() {
-# Replace multiple (white)spaces with one space
+# Replaces multiple (white)spaces with one space.
+# Example: echo "This    is some text" | sed_space_removeextra
 sed 's/[[:space:]]\+/ /g'
 }
 
 function sed_space_trim() {
-# Remove Leading and Trailing Whitespaces
+# Removes leading and trailing whitespaces.
 sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
 }
 
 function sed_space_removeall() {
-# Remove All Whitespaces (Spaces, Tabs, Newlines)
+# Removes all whitespaces (Spaces, Tabs, Newlines)
 sed ':a;N;$!ba;s/[[:space:]]//g'
 }
 
 function sed_keep_textandnumbers() {
+# Filters out text characters and numbers from the input text.
 sed 's/[^a-zA-Z0-9]//g'
 }
 
@@ -396,14 +490,22 @@ function sed_keep_numbers() {
 sed 's/[^0-9]//g'
 }
 
+function sed_keep_price() {
+# Extracts price values from input text.
+# Example: echo "Cost: $456.68" | sed_keep_price      ; outputs 456.68
+# Alias function: regex_price
+sed 's/[^0-9.]//g'
+}
 
 function sed_upper2lowercase() {
+# Changes input text to all lower case letters.
+# Example: echo "This is OuTStanding" | sed_upper2lowercase
 sed 's/[A-Z]/\L&/g'
 }
 
 function sed_add2end() {
-# Add a suffix to each line
-# EXAMPLE: echo -e "Line1\nLine2" |  sed_add2end
+# Adds a suffix to each line.
+# Example: echo -e "Line1\nLine2" | sed_add2end
 # Output:
 # Line1 [SUFFIX]
 # Line2 [SUFFIX]
@@ -411,55 +513,59 @@ sed 's/$/ [SUFFIX]/'
 }
 
 function sed_removelastline() {
+# Removes the last line in the input text.
 sed '$d'
 }
 
 function sed_removefirstline() {
+# Removes the first line in the input text.
 sed '1d'
 }
 
 function sed_keeplastword() {
-# keeps only the last word (after whitespace)
+# Keeps only the last word (after whitespace).
+# Example: echo "This is some text here" | sed_keeplastword    ; output is: here
 sed -E 's/.*[[:space:]]//g'
 }
 
 function sed_addemptyline() {
-# add a blank line
+# Adds a new blank line to the text input.
 sed 'G' 
 }
 
 function sed_removeemptylines() {
-# remove all blank/empty lines
+# Removes all blank/empty lines in the text input.
 sed '/./!d'
 }
 
 function sed_joinlines() {
-# remove "\n" "\r" from the end to join two lines into one, plus remove whitespaces from the end
+# Removes "\n" "\r" from the end to join two lines into one, plus removes whitespaces from the end.
 sed 's/\r//' | tr -d '\n' | sed 's/[ \t]*$//'
 }
 
 function sed_joinlines_commasep() {
-# Remove \r, join lines with ", ", and remove trailing whitespaces
+# Removes \r, join lines with ", ", and removes trailing whitespaces.
 sed 's/\r//' | tr '\n' ', ' | sed 's/[ \t]*,$//'
 }
 
 function sed_joinlines_semicolonsep() {
-# Remove \r, join lines with ", ", and remove trailing whitespaces
+# Removes \r, join lines with ", ", and removes trailing whitespaces.
 sed 's/\r//' | tr '\n' '; ' | sed 's/[ \t]*;$//'
 }
 
 function sed_cleantext() {
-# Removes the weird metadata characters from text
+# Removes the weird metadata characters from the input text.
 sed 's/\x1b\[[0-9;]*m//g'
 }
 
-
 function regex_keep_number() {
-grep -oE "^[0-9]+\.[0-9]+"
+# Keeps only the numbers and dots (.) which are found from the input text.
+# Example: echo "The price is 0.54 USD" | regex_keep_number    ; Output: 0.54
+grep -oE "[0-9]+\.[0-9]+"
 }
 
 function regex_keep_numberof_decimals() {
-# keep only a selected number of decimals after "."
+# Keeps only a selected number of decimals after dot (.)
 # Ex: echo "0.24005" | regex_keep_numberof_decimals 2
 # Output: 0.24
 local input
@@ -469,33 +575,47 @@ echo "$input" | grep -oE "^[0-9]+\.[0-9]{1,$digits}"
 }
 
 function regex_until() {
-# Delete Everything After a Certain Character
-# echo "helloXworld" | regex_until "X"    ->    Output: hello
+# Deletes everything after a certain character.
+# Example: echo "helloXworld" | regex_until "X"    ->    Output: hello
 sed -e "s/$1.*//"
 }
 
 function regex_until_specialchar() {
-# If $char contains special characters like / or &, use a different delimiter (| instead of /):
+# If input text contains special characters like / or &, then uses a different delimiter (| instead of /):
+# Example: echo "some text & with" | regex_until_specialchar '&'    ; Output: some text
 local char="$1"
 sed "s|$char.*||"
 }
 
 function regex_awk_seen() {
+# Skips the already seen outputs/text when going through the lines of text.
+# The point is to not show duplicate lines, if these have already displayed once.
 awk '!seen[$0]++'
 }
 
 function regex_awk_sum() {
+# Adds numbers, that are outputted on lines of text, by summing them together.
+# Very useful for calculating sums.
+# Example: cat numbers.txt | regex_awk_sum
+# If numbers.txt file contains "4.52" on the first line, and "2" on second line,
+# then the output is the sum of them (4.52 + 2), in this case 6.52
 awk '{sum+=$1} END {print sum}'
 }
 
 function regex_awk_remove_betweenwords() {
+# Removes a part of the input text, that is between two defined words.
+# Example: echo "This is some random text" | regex_awk_remove_betweenwords "This" "some"
+# outputs to " random text"
 local start=${1?Need the starting word and ending word}
 local start="$1"
 local end="$2"
-awk "{gsub(/$start .*?$end/, \"\")}1"
+awk -v s="$start" -v e="$end" '{gsub(s ".*" e, ""); print}'
 }
 
 function regex_awk_keep_betweenwords() {
+# Keeps a part of the input text, starting with the first word and ending with the second.
+# Example: echo "This is some random text" | regex_awk_keep_betweenwords "some" "text"
+# outputs to: "some random text", so it keeps the beginning word and the ending word also.
 local start=${1?Need the starting word and ending word}
 local start="$1"
 local end="$2"
@@ -517,20 +637,24 @@ awk "{match(\$0, /$start .*?$end/, m); if (m[0]) print m[0]}"
 #| `sortup_abs_colnum`   | Descending | Abs values  | Furthest from 0    |
 
 function sortdown_colnum() {
-# using numerical values
+# Sorts input data by a specified column in descending numerical order.
+# Example: cat data.csv | sortdown_colnum 3    ; sorting based on the column number 3
 local col=${1?Usage example: sortdown_colnum 3}
 col="$1"
 awk -F',' -v col="$col" '{ print $col "|" $0 }' | sort -t'|' -k1,1n | cut -d'|' -f2-
 }
 
 function sortup_colnum() {
+# Sorts input data by a specified column in ascending numerical order.
+# Example: cat data.csv | sortup_colnum 3    ; sorting based on the column number 3
 local col=${1?Usage example: sortup_colnum 3}
 col="$1"
 awk -F',' -v col="$col" '{ print $col "|" $0 }' | sort -t'|' -k1,1nr | cut -d'|' -f2-
 }
 
 function sortdown_abs_colnum() {
-# using absolute values
+# Sorts input data by a specified column in descending order, treating negative values as positive.
+# Example: cat data.csv | sortdown_abs_colnum 3
 local col=${1?Usage example: sortdown_abs_colnum 3}
 col="$1"
 awk -F',' -v col="$col" '{
@@ -541,6 +665,8 @@ awk -F',' -v col="$col" '{
 }
 
 function sortup_abs_colnum() {
+# Sorts input data by a specified column in ascending order, treating negative values as positive.
+# Example: cat data.csv | sortup_abs_colnum 3
 local col=${1?Usage example: sortup_abs_colnum 3}
 col="$1"
 awk -F',' -v col="$col" '{
@@ -550,8 +676,9 @@ awk -F',' -v col="$col" '{
 }' | sort -t'|' -k1,1nr | cut -d'|' -f2-
 }
 
-
 function sort_col() {
+# Sorts input data by a specified column number, either numerically or alphabetically, based on the mode (up or down).
+# Example: cat data.csv | sort_col 2 up
 local col=${1?Usage example: sort_col 3 up}
 # sort_col 2 up - sorts A-Z, if used non-numerical, but words
 # sort_col 2 down - sorts Z-A
@@ -602,16 +729,14 @@ END {
 
 
 
-
-
-
-
 # ------------ AUDIO / VIDEO / IMAGE PROCESSING ------------
 
 function exa() {
-# for exctracting audio
+# Extracts a segment of audio from an input file between specified start and end times.
+# Example: exa this.mp3 00:14:17 00:19:22
+
     if [ $# -ne 3 ]; then
-        echo "For extracting a part of audio between certain timeframes."
+        echo "Extracts a segment of audio from an input file between specified start and end times."
         echo "Usage: exa input_file start_time end_time"
         echo "Example: exa this.mp3 00:14:17 00:19:22"
         return 1
@@ -631,9 +756,10 @@ function exa() {
 
 
 function exc() {
-# for exctracting a clip of a video or audio
+# Extracts a segment of video or audio from an input file between specified start and end times.
+# Example: exc this.mp4 00:14:17 00:19:22
     if [ $# -ne 3 ]; then
-        echo "For extracting a part of video or audio between certain timeframes."
+        echo "Extracts a segment of video or audio from an input file between specified start and end times."
         echo "Usage: exc input_file start_time end_time"
         echo "Example: exc this.mp4 00:14:17 00:19:22"
         return 1
@@ -653,6 +779,8 @@ function exc() {
 
 
 function to_mp4() {
+# Converts input video files to MP4 format with a specified bitrate.
+# Example: ls *.mov | all | to_mp4 3000
 if [[ $# -ne 1 ]]; then
 echo "For converting all inputted video files to mp4 videos with your custom bitrate."
 echo "Usage example for all mov files in current folder: ls *.mov | all | tomp4 3000"
@@ -677,6 +805,8 @@ echo "All conversions complete!"
 
 
 function to_gif() {
+# Converts an input video file to GIF format.
+# Example: echo "video file.mp4" | to_gif
 if [[ $# -ne 1 ]]; then
 echo "For converting inputted video file to GIF format."
 echo "Usage example: echo \"video file.mp4\" | togif"
@@ -691,6 +821,8 @@ done
 
 
 function to_png() {
+# Converts an input image file to PNG format.
+# Example: echo "photo 1.jpg" | to_png
 if [[ $# -ne 1 ]]; then
 echo "For converting inputted image file to PNG format."
 echo "Usage example: echo \"photo 1.jpg\" | topng"
@@ -704,6 +836,8 @@ done
 
 
 function to_jpg() {
+# Converts an input image file to JPG format.
+# Example: echo "photo 1.png" | to_jpg
 if [[ $# -ne 1 ]]; then
 echo "For converting inputted image file to JPG format."
 echo "Usage example: echo \"photo 1.png\" | tojpg"
@@ -717,6 +851,8 @@ done
 
 
 function to_jpg_from_HEIC() {
+# Converts an input HEIC image file to JPG format.
+# Example: echo "photo 1.heic" | to_jpg_from_HEIC
 if [[ $# -ne 1 ]]; then
 echo "For converting inputted image file to JPG format."
 echo "Usage example: echo \"photo 1.png\" | tojpg"
@@ -731,6 +867,8 @@ done
 
 
 function cutvideo() {
+# Cuts a segment from a video file between specified start and end times.
+# Example: cutvideo "filename.mp4" 00:00:05 00:02:00
 if [[ $1 == "" ]]; then
  echo "Example usage: cutvideo \"filename.mp4\" 00:00:05 00:02:00"
 else
@@ -746,6 +884,8 @@ fi
 }
 
 function cutaudio() {
+# Cuts a segment from an audio file between specified start and end times.
+# Example: cutaudio "filename.mp3" 00:00:05 00:02:00
 if [[ $1 == "" ]]; then
  echo "Example usage: cutaudio \"filename.mp3\" 00:00:05 00:02:00"
 else
@@ -761,9 +901,11 @@ fi
 }
 
 
-function to_clipboard() {
-# For sending variable, text, file contents, png or jpg to clipboard, ready to be pasted (with Ctrl+V)
-# Example usage: $textoutput | toclipboard
+function toclipboard() {
+# Copies variable content, text, image or file contents to the clipboard, ready to be pasted (with Ctrl+V).
+# Example for text: echo "Hello, World!" | toclipboard
+# Example for image: ls zoom.png | toclipboard
+
 input=$(cat)     # Read input from stdin or a pipe
 if [[ -f "$input" ]]; then    # Check if the input is a file and exists
 case "$input" in
@@ -791,6 +933,11 @@ fi
 # ------------ IMAGE PROCESSING ----------------
 
 function generateQR() {
+# Generates a QR code image file from input text.
+# Usage: generateQR "https://qortal.dev"
+# Outputs the file to Home folder as QR.png
+# Pro Tip: generateQR "https://qortal.dev" | ls /home/$USER/QR.png | toclipboard
+# This puts the generated QR code image to the Clipboard, ready to be pasted :)
 if [[ $# -ne 1 ]]; then
 echo "For generating QR code out of any text or input. The generated QR-code image file (QR.png) will end up in your home folder."
 echo "Usage example: generateQR \"https://qortal.dev\""
@@ -802,7 +949,8 @@ echo "Generated /home/$USER/QR.png"
 
 
 function scan_jpg() {
-# Scans from a connected scanner into jpg image file, put into Scanned folder
+# Scans from a connected scanner into JPG image file.
+# Output files end up in Scanned folder (under your Home folder).
 mkdir -p /home/$USER/Scanned
 date_time=$(date +"%d.%m_%H:%M:%S")
 filename="/home/$USER/Scanned/$date_time"
@@ -812,7 +960,8 @@ convert /tmp/scanned_image.pnm $filename.jpg
 }
 
 function scan_pdf() {
-# Scans from a connected scanner into pdf file, put into Scanned folder
+# Scans from a connected scanner into PDF image file.
+# Output files end up in Scanned folder (under your Home folder).
 mkdir -p /home/$USER/Scanned
 date_time=$(date +"%d.%m_%H:%M:%S")
 failinimi="/home/$USER/Scanned/$date_time"
@@ -822,26 +971,37 @@ convert /tmp/scanned_image.pnm $filename.pdf
 }
 
 
-function PDF_rotate_clockwise() {
+function pdf_rotate_clockwise() {
+# Rotates a PDF file clockwise.
+# Example: pdf_rotate_clockwise "document.pdf"
+local file=${1?Usage example: pdf_rotate_clockwise "document.pdf"}
 gs -o "rotated_$1" -sDEVICE=pdfwrite -c "<</Orientation 3>> setpagedevice" -f "$1"
 }
 
-function PDF_rotate_allinfolder_clockwise() {
+function pdf_rotate_allinfolder_clockwise() {
+# Rotates all PDF files in the current folder clockwise.
+# Example: PDF_rotate_allinfolder_clockwise
 for file in *.pdf; do gs -o "$file" -sDEVICE=pdfwrite -c "<</Orientation 3>> setpagedevice" -f "$file"; done
 }
 
-function PDF_compress_allinfolder() {
+function pdf_compress_allinfolder() {
+# Compresses all PDF files in the current folder.
+# Example: PDF_compress_allinfolder
 for file in *.pdf; do gs -o "$file" -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/screen -c "<</Orientation 3>> setpagedevice" -f "$file"; done
 }
 
 
 function pdf2txt_OCR() {
+# Extracts data from a PDF to a text file using OCR.
+# Example: pdf2txt_OCR "document.pdf"
 echo "Processing:" $1
 tesseract "$1" "$1.txt" -l est
 replace_extension jpg.txt.txt txt
 }
 
 function pdf2txt_OCR_allin() {
+# Extracts data from all PDF files in the current folder, to text files using OCR.
+# Example: pdf2txt_OCR_allin
 while IFS= read -r file; do
 echo "Processing:" $file
 output="${file%.*}.txt"   # $output will have a replaced extension
@@ -852,7 +1012,8 @@ done
 
 
 function OCR_recursively_alljpg2txt() {
-# creates .txt files of all found jpg files in current folder AND subfolders.
+# Creates .txt files of all found jpg files in current folder AND SUBFOLDERS!
+# Example: OCR_recursively_alljpg2txt
 find . -type f \( -iname '*.jpg' -o -iname '*.jpeg' \) | while IFS= read -r img; do
 txt="${img%.*}.txt"
 if [[ ! -f "$txt" ]]; then
@@ -866,7 +1027,8 @@ done
 
 
 function resize50() {
-# For resizing all files in current folder and subfolders by -50% with overwriting method
+# Resizes all image files in current folder AND ITS SUBFOLDERS to -50% image size by overwriting method, meaning shrinking the original images 50% in their resolution, without making any copies.
+# Example: resize50 jpg
 ext="$1"
 if [[ -z "$ext" ]]; then
 echo "Resize (make 50% smaller) all jpg, png, webp or other images in current folder AND in the subfolders. NB! It does not create copies, but just overwrites the same images."
@@ -913,24 +1075,46 @@ done
 # ------------ DOCS PROCESSING ------------
 
 function xlsx2pdf() {
+# Converts an excel file to PDF format using LibreOffice engine.
+# Example: xlsx2pdf "file.xlsx"
+local test=$(which libreoffice)
+if [[ $test != "" ]]; then
 libreoffice --headless --convert-to pdf "$1"
+else
+echo "Please make sure to have LibreOffice installed for this function to work."
+fi
 }
 
 function ods2xlsx() {
+# Converts an ODS file to XLSX format using LibreOffice engine.
+# Example: ods2xlsx "file.ods"
+local test=$(which libreoffice)
+if [[ $test != "" ]]; then
 libreoffice --headless --convert-to xlsx "$1"
+else
+echo "Please make sure to have LibreOffice installed for this function to work."
+fi
 }
 
 function pdf2docx() {
-# Usage: pdf2docx file.pdf ~/Desktop/
+# Converts a PDF file to DOCX format and saves it to a specified folder by using LibreOffice engine.
+# Example: pdf2docx file.pdf ~/Desktop/
 local file=${1?No input given for the file name}
 local folder=${2:-$(pwd)}  # Default to current directory if no output folder is provided
+local test=$(which libreoffice)
+if [[ $test != "" ]]; then
 libreoffice --headless --convert-to docx --outdir "$folder" "$file"
+else
+echo "Please make sure to have LibreOffice installed for this function to work."
+fi
 }
 
 
 
 function jpg2txt_allincwd() {
-# Works also like: jpg2txt_allincwd *.pdf
+# Extracts data into text files from image files or pdf files, inside the current folder.
+# Example: jpg2txt_allincwd *.pdf
+# Example: jpg2txt_allincwd *.jpg
 pattern="${1:-*.jpg}"                               # Check if an argument is passed, otherwise default to *.jpg
 for f in $pattern; do pdf2txt_OCR "$f" "$f"; done   # Loop through the files based on the provided pattern
 }
@@ -940,12 +1124,12 @@ for f in $pattern; do pdf2txt_OCR "$f" "$f"; done   # Loop through the files bas
 # ------------ CRYPTO --------------------
 
 function crypto_fearandgreedindex() {
-# Get current crypto fear and greed index via API
+# Gets the current crypto fear and greed index via API (usable only once a day).
 curl -s https://api.alternative.me/fng/ | jq -r '.data[0].value'
 }
 
 function qort_price() {
-# Get the price of QORT cryptocurrency from TradeOgre using API
+# Gets the current market price of QORT cryptocurrency from TradeOgre using API.
 curl -sX GET "https://tradeogre.com/api/v1/markets" | jq -r '.[]["QORT-USDT"].price // empty | tonumber'
 }
 
@@ -957,10 +1141,7 @@ curl -sX GET "https://tradeogre.com/api/v1/markets" | jq -r '.[]["QORT-USDT"].pr
 # ------------ VERSION CHECK / UPDATE ------------
 
 function ba_versioncheck() {
-# Check for a newer version of the library on GitHub
-# The version check could happen automatically on every first day of the month and notification come into Terminal about the update being available.
-# Or manually by running, with the option to auto-update (install automatically) by running "bash.addins update" - this should download the new version from GitHub,
-# make it it executable and overwrite the existing file with the new one. # The comparison of the versions should be done on the $ba_version
+# Checks for a newer version of the BASH Addins library on GitHub. The version check COULD happen automatically on every first day of the month and notification come into Terminal about the update being available. Or manually by running, with the option to auto-update (install automatically) by running "bash.addins update" - this should download the new version from GitHub, make it it executable and overwrite the existing file with the new one. The comparison of the versions should be done on the $ba_version
 # If there is a newer (higher) version number in GitHub compared to the one written into the current bash.addins file, then notify the user.
 mkdir -p /tmp
 echo "Checking GitHub for a newer version..."
@@ -971,13 +1152,14 @@ rm /tmp/ba.ver
 if [[ "$(printf '%s\n' "$ba_version" "$ba_githubversion" | sort -V | head -n 1)" != "$ba_githubversion" ]]; then
  echo "Newer version of the BASH addins library ($ba_githubversion) available on GitHub."
 
+# ↓-- NEEDS TO BE MADE FUNCTIONAL AT SOME POINT --↓ #
 #echo "Do you want to install it now?"
-
-# The download and installation process should happen here:
+# -- The download and installation process should happen here:
 #cd /tmp && wget -q "https://github.com/arrrtto/bash.addins/archive/refs/tags/$ba_githubversion.zip"
 #unzip $ba_githubversion.zip && mv /tmp/bash.addins-$ba_githubversion/bash.addins /home/$USER/bin/bash.addins && chmod +x /home/$USER/bin/bash.addins
 #cd -
 #echo "Downloaded, extracted and moved the newer version to /home/$USER/bin :)"
+# ↑-- NEEDS TO BE MADE FUNCTIONAL AT SOME POINT --↑ #
 
 fi
 if [[ $ba_githubversion == $ba_version ]]; then
@@ -990,15 +1172,15 @@ fi
 # ------------ SETUP ------------
 
 function ba_setup() {
-# For setting up the files, folder structure, configurations (paths) and installing software dependencies
-# Set up .bashrc contents for file and folder paths
+# For setting up the files, folder structure, configurations (paths) and installing software dependencies.
+# Sets up .bashrc contents for file and folder paths.
 local bashrc_file="$HOME/.bashrc"
 local new_lines=$(cat <<EOF
 export PATH=\$PATH:/home/\$USER/bin
 source bash.addins
 EOF
 )
-if ! grep -q "bash.addins" "$bashrc_file"; then    # Check if the lines already exist to avoid duplicates, and if not append the lines to .bashrc
+if ! grep -q "bash.addins" "$bashrc_file"; then    # Check if the lines already exist to avoid duplicates, and if not, append the lines to .bashrc
 echo "$new_lines" >> "$bashrc_file"
 echo ".bashrc has been updated with new environment variables."
 fi
@@ -1010,7 +1192,7 @@ chmod +x "/home/$USER/bin/bash.addins"
 fi
 
 # Install all the dependencies (should get installed well at least on Debian based systems)
-sudo apt install -y qrencode ffmpeg wget libheif1 sane-utils imagemagick ghostscript xdotool curl csvkit imagemagick wmctrl xclip tesseract-ocr scrot gnome-screenshot jq python3-full python3-xlsxwriter python3-openpyxl python3-odf python3-pdfkit csvkit html2text docx2txt xlsx2csv mupdf unoconv libreoffice-script-provider-python sox pdftk
+sudo apt install -y qrencode ffmpeg wget libheif1 sane-utils imagemagick ghostscript xdotool curl csvkit imagemagick wmctrl xclip x11-apps tesseract-ocr scrot gnome-screenshot jq python3-full python3-xlsxwriter python3-openpyxl python3-odf python3-pdfkit csvkit html2text docx2txt xlsx2csv mupdf unoconv libreoffice-script-provider-python sox pdftk
 }
 
 
@@ -1030,4 +1212,7 @@ echo
 echo "To display the current version, run:"
 echo "bash.addins version"
 echo
+echo "Once you have the library installed/loaded, you can see the list of functions with:"
+echo "showallfunctions"
+
 fi
