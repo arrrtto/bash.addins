@@ -1,18 +1,70 @@
-**To "install" **or basically start using this Library with custom functionalities, all you have to do is:
-1. Have a GNU/Linux operating system (Debian-based, LMDE for example)
-2. Download the bash.addins file
-3. Put it into your Home folder, under a folder called "bin". If you don't have a "bin" folder, create it, and then put the file there
-4. Make the file executable in Terminal: chmod +x /home/$USER/bin/bash.addins
-5. Run this: bash.addins setup
+# bash.addins
 
-The setup does this: installs some needed dependencies with sudo apt install command (works on Debian based systems), then adds "source bash.addins" command to .bashrc file so that the Library would get imported every time you open the Terminal.
+Enhanced bash scripting library with modular functionality for GNU/Linux systems.
 
-**Custom commands (parameters):**
-bash.addins help
+## Installation
+
+1. Clone the repository:
+```bash
+git clone https://github.com/thatstraw/bash.addins.git
+```
+
+2. Create a symbolic link to your bin directory:
+```bash
+ln -s $(pwd)/bash.addins.sh ~/bin/bash.addins
+```
+
+3. Make it executable:
+```bash
+chmod +x ~/bin/bash.addins
+```
+
+4. Run setup:
+```bash
 bash.addins setup
+```
+
+## Features
+
+bash.addins is now organized into several modules:
+
+- `system`: System utilities and process management
+- `text`: Text processing and regex functions
+- `gui`: GUI window management
+- `media`: Audio/video/image processing
+- `crypto`: Cryptocurrency utilities
+
+## Usage
+
+```bash
+# Show help
+bash.addins help
+
+# Setup bash.addins
+bash.addins setup
+
+# Update to latest version
 bash.addins update
+
+# Show version
 bash.addins version
 
+# Module-specific help
+bash.addins module_name help
+```
 
-Testing, help (by additional developments to the Library) and feedback are welcome.
-Contact: artto@tuta.com or @divineloveartto on Telegram
+## Module Documentation
+
+Each module has its own documentation in the `docs` directory. Check the specific module documentation for detailed usage instructions.
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
