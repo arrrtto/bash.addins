@@ -77,7 +77,7 @@ function ba_versioncheck() {
 # Checks for a newer version of the BASH Addins library on GitHub.
 mkdir -p /tmp
 echo "Checking GitHub for a newer version..."
-curl -s "https://github.com/arrrtto/bash.addins/blob/main/bash.addins" > /tmp/ba.ver
+curl -s "https://github.com/arrrtto/bash.addins/blob/main/installer" > /tmp/ba.ver
 BA_GITHUBVERSION=$(cat /tmp/ba.ver | grep -oP 'BA_VERSION=........' | grep -oP '\d+.\d+')
 rm /tmp/ba.ver
 # Compare the versions as arithmetic values...
