@@ -1,0 +1,133 @@
+#!/bin/bash
+
+# BASH Addins - the library of custom functions and aliases for enhanced BASH scripting and Terminal usage.
+# Started by Artto Aunap (https://github.com/arrrtto) in 2025 for personal use, but in 2025 decided to share with the GNU/Linux and FOSS community.
+
+BA_VERSION="1.04"
+BA_DESCRIPTION="Enhanced BASH scripting library"
+BA_AUTHOR="Artto Aunap"
+BA_LICENSE="MIT"
+BA_INSTALLERFILE="$(realpath "$0")"
+BA_INSTALLERFILE=$(echo "$BA_INSTALLERFILE" | awk -F'/' '{print $NF}')
+
+
+
+# ------------ SETUP FUNCTIONS ------------
+# Core functions for setting up BASH Addins for local computer use.
+
+function add_to_bashrc() {
+# If the line "souce bash.addins" does not yet exist in .bashrc file, this function will add it.
+if ! grep -q "bash.addins" ~/.bashrc; then
+echo "source ~/bin/bash.addins" >> ~/.bashrc
+echo "BASH Addins now added to .bashrc for automatic loading and usage in your Terminal."
+fi
+}
+
+
+function install_dependencies() {
+# Function to install all the software dependencies (should get installed well on Debian based systems)
+if grep -q -i "debian" /etc/os-release || grep -q -i "ubuntu" /etc/os-release; then  # If Debian based, use apt to install the packages
+clear
+echo "Installing the needed software that BASH Addins depends upon for best possible use..."
+sudo apt install -y qrencode ffmpeg wget sane-utils imagemagick ghostscript xdotool curl csvkit imagemagick wmctrl xclip x11-apps tesseract-ocr scrot gnome-screenshot jq python3-full python3-xlsxwriter python3-openpyxl python3-odf python3-pdfkit csvkit html2text docx2txt xlsx2csv mupdf unoconv libreoffice libreoffice-script-provider-python sox pdftk
+else
+echo "This is not a Debian-based distribution."
+fi
+}
+
+
+function append_module() {
+# Function for adding the needed custom functions modules into the final bash.addins file.
+local module_file="$1"
+if [[ -f "$module_file" ]]; then
+  echo "Appending module: $module_file..."
+  cat "$module_file"  | sed -n '3,$p' >> "$OUTPUT_FILE" # Append the module content starting from the 3rd row to skip the shebang and subsequent empty line
+  echo "" >> "$OUTPUT_FILE"  # Add a newline for separation
+else
+  echo "Module $module_file not found!"
+fi
+}
+
+
+function ba_compile() {
+# Function for creating the final bash.addins file by adding in the necessary contents from the module files.
+OUTPUT_FILE="bash.addins"   # Define the output file name to be generated: bash.addins
+echo "#!/bin/bash" > "$OUTPUT_FILE"  # Create the bash.addins file and add shebang as the first line
+sed -n '1!{/^BA_VERSION=/q;p}' "$BA_INSTALLERFILE" >> "$OUTPUT_FILE"  # Add the contents from installer file from the second line to BA_VERSION line into the bash.addins file 
+# Append the modules
+append_module "modules/main.sh"
+append_module "modules/aliases.sh"
+append_module "modules/system.sh"
+append_module "modules/gui.sh"
+append_module "modules/text.sh"
+append_module "modules/media.sh"
+append_module "modules/crypto.sh"
+chmod +x "$OUTPUT_FILE"  # Make bash.addins file executable
+echo "$OUTPUT_FILE file generated to the current folder."
+}
+
+
+function ba_tobin() {
+mkdir -p /home/$USER/bin  # Create the bin folder, if it does not exist, for putting the bash.addins file into it later on
+mv "$OUTPUT_FILE" "/home/$USER/bin/" && echo "Moved the $OUTPUT_FILE to /home/$USER/bin/"
+}
+
+
+function ba_versioncheck() {
+# Checks for a newer version of the BASH Addins library on GitHub.
+mkdir -p /tmp
+echo "Checking GitHub for a newer version..."
+curl -s "https://github.com/arrrtto/bash.addins/blob/main/bash.addins" > /tmp/ba.ver
+BA_GITHUBVERSION=$(cat /tmp/ba.ver | grep -oP 'BA_VERSION=........' | grep -oP '\d+.\d+')
+rm /tmp/ba.ver
+# Compare the versions as arithmetic values...
+if [[ "$(printf '%s\n' "$BA_VERSION" "$BA_GITHUBVERSION" | sort -V | head -n 1)" != "$BA_GITHUBVERSION" ]]; then
+echo "Newer version of the BASH addins library ($BA_GITHUBVERSION) available on GitHub."
+
+# ↓-- NEEDS TO BE MADE FUNCTIONAL AT SOME POINT --↓ #
+#echo "Do you want to install it now?"
+# -- The download and installation process should happen here:
+#cd /tmp && wget -q "https://github.com/arrrtto/bash.addins/archive/refs/tags/$BA_GITHUBVERSION.zip"
+#unzip $BA_GITHUBVERSION.zip && mv /tmp/bash.addins-$BA_GITHUBVERSION/bash.addins /home/$USER/bin/bash.addins && chmod +x /home/$USER/bin/bash.addins
+#cd -
+#echo "Downloaded, extracted and moved the newer version to /home/$USER/bin :)"
+# ↑-- NEEDS TO BE MADE FUNCTIONAL AT SOME POINT --↑ #
+fi
+if [[ $BA_GITHUBVERSION == $BA_VERSION ]]; then
+echo "You have the same version that is on GitHub."
+fi
+}
+
+
+function ba_setup() {
+install_dependencies
+ba_compile
+ba_tobin
+add_to_bashrc
+echo "Setup complete! Reload your shell to apply changes."
+}
+
+
+function show_help() {
+clear
+echo BASH Addins installer, version ${BA_VERSION}
+printf "\n"
+printf "Usage:\n\n"
+printf "\e[32m./%s help\e[0m      Shows this help message\n" "${BA_INSTALLERFILE}"
+printf "\e[32m./%s version\e[0m   Shows current version\n" "${BA_INSTALLERFILE}"
+printf "\e[32m./%s check\e[0m     Checks GitHub for a newer version\n" "${BA_INSTALLERFILE}"
+printf "\e[32m./%s setup\e[0m     Installs software dependencies, creates the final bash.addins file, which includes all the functions from the modules combined, copies it to ~/bin folder\n" "${BA_INSTALLERFILE}"
+printf "\e[32m./%s compile\e[0m   Just creates the final bash.addins file into the current folder and copies it to ~/bin\n" "${BA_INSTALLERFILE}"
+printf "\n\n"
+}
+
+
+# ------------ PARAMETERS TO RUN THE LIBRARY FILE WITH ------------
+if [[ "$1" == "help" ]] || [[ "$1" == "" ]]; then show_help; fi
+if [[ "$1" == "version" ]]; then echo "BASH Addins version $BA_VERSION" && sleep 1; fi
+if [[ "$1" == "check" ]]; then ba_versioncheck; fi
+if [[ "$1" == "setup" ]]; then ba_setup; fi
+if [[ "$1" == "compile" ]]; then ba_compile; ba_tobin; add_to_bashrc; fi
+
+
+
