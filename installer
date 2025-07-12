@@ -99,8 +99,26 @@ fi
 }
 
 
+function download_modules() {
+if [[ ! -d ./modules ]]; then  # If modules folder does not exist, create it and download the module files
+echo "Downloading modules..."
+mkdir modules
+cd modules
+wget -q https://raw.githubusercontent.com/arrrtto/bash.addins/main/modules/aliases.sh
+wget -q https://raw.githubusercontent.com/arrrtto/bash.addins/main/modules/crypto.sh
+wget -q https://raw.githubusercontent.com/arrrtto/bash.addins/main/modules/main.sh
+wget -q https://raw.githubusercontent.com/arrrtto/bash.addins/main/modules/gui.sh
+wget -q https://raw.githubusercontent.com/arrrtto/bash.addins/main/modules/media.sh
+wget -q https://raw.githubusercontent.com/arrrtto/bash.addins/main/modules/text.sh
+wget -q https://raw.githubusercontent.com/arrrtto/bash.addins/main/modules/system.sh
+cd ..
+fi
+}
+
+
 function ba_setup() {
 install_dependencies
+download_modules
 ba_compile
 ba_tobin
 add_to_bashrc
@@ -127,7 +145,4 @@ if [[ "$1" == "help" ]] || [[ "$1" == "" ]]; then show_help; fi
 if [[ "$1" == "version" ]]; then echo "BASH Addins version $BA_VERSION" && sleep 1; fi
 if [[ "$1" == "check" ]]; then ba_versioncheck; fi
 if [[ "$1" == "setup" ]]; then ba_setup; fi
-if [[ "$1" == "compile" ]]; then ba_compile; ba_tobin; add_to_bashrc; fi
-
-
-
+if [[ "$1" == "compile" ]]; then download_modules; ba_compile; ba_tobin; add_to_bashrc; fi
