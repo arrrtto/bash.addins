@@ -2,7 +2,7 @@
 
 # GUI module configuration
 MODULE_NAME="gui"
-MODULE_VERSION="1.0"
+MODULE_VERSION="1.04"
 MODULE_DESCRIPTION="GUI window management functions"
 
 

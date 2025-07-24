@@ -3,13 +3,12 @@
 # BASH Addins - the library of custom functions and aliases for enhanced BASH scripting and Terminal usage.
 # Started by Artto Aunap (https://github.com/arrrtto) in 2025 for personal use, but in 2025 decided to share with the GNU/Linux and FOSS community.
 
-BA_VERSION="1.04"
+BA_VERSION="1.05"
 BA_DESCRIPTION="Enhanced BASH scripting library"
 BA_AUTHOR="Artto Aunap"
 BA_LICENSE="MIT"
 BA_INSTALLERFILE="$(realpath "$0")"
 BA_INSTALLERFILE=$(echo "$BA_INSTALLERFILE" | awk -F'/' '{print $NF}')
-
 
 
 # ------------ SETUP FUNCTIONS ------------
@@ -61,6 +60,7 @@ append_module "modules/system.sh"
 append_module "modules/gui.sh"
 append_module "modules/text.sh"
 append_module "modules/media.sh"
+append_module "modules/fancy.sh"
 append_module "modules/crypto.sh"
 chmod +x "$OUTPUT_FILE"  # Make bash.addins file executable
 echo "$OUTPUT_FILE file generated to the current folder."
@@ -111,6 +111,7 @@ wget -q https://raw.githubusercontent.com/arrrtto/bash.addins/main/modules/gui.s
 wget -q https://raw.githubusercontent.com/arrrtto/bash.addins/main/modules/media.sh
 wget -q https://raw.githubusercontent.com/arrrtto/bash.addins/main/modules/text.sh
 wget -q https://raw.githubusercontent.com/arrrtto/bash.addins/main/modules/system.sh
+wget -q https://raw.githubusercontent.com/arrrtto/bash.addins/main/modules/fancy.sh
 cd ..
 fi
 }
@@ -146,3 +147,6 @@ if [[ "$1" == "version" ]]; then echo "BASH Addins version $BA_VERSION" && sleep
 if [[ "$1" == "check" ]]; then ba_versioncheck; fi
 if [[ "$1" == "setup" ]]; then ba_setup; fi
 if [[ "$1" == "compile" ]]; then download_modules; ba_compile; ba_tobin; add_to_bashrc; fi
+
+
+
