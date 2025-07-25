@@ -2,7 +2,7 @@
 
 # Crypto related module
 MODULE_NAME="crypto"
-MODULE_VERSION="1.04"
+MODULE_VERSION="1.06"
 MODULE_DESCRIPTION="Cryptocurrency utilities"
 
 

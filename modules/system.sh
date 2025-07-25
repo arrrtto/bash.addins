@@ -2,7 +2,7 @@
 
 # General system module
 MODULE_NAME="system"
-MODULE_VERSION="1.04"
+MODULE_VERSION="1.06"
 MODULE_DESCRIPTION="System utilities, files and process management"
 
 
@@ -262,5 +262,4 @@ else
  echo "No .crdownload files found, so possibly nothing is downloading to Downloads folder at the moment."
 fi
 }
-
 

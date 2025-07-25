@@ -2,9 +2,11 @@
 
 # Media module
 MODULE_NAME="media"
-MODULE_VERSION="1.04"
+MODULE_VERSION="1.06"
 MODULE_DESCRIPTION="Audio/video/image processing functions"
 
+
+# ------------ AUDIO AND VIDEO PROCESSING ----------------
 
 function exa() {
 # Extracts a segment of audio from an input file between specified start and end times.
@@ -19,11 +21,11 @@ function exa() {
     input="$1"
     start="$2"
     end="$3"
-    base="${input%.*}"       # Remove extension
-    ext="${input##*.}"       # Get extension
+    base="${input%.*}"   # Remove extension
+    ext="${input##*.}"   # Get extension
     counter=1
 
-    # Find next available filename
+# Find next available filename
     while [ -e "${base}_clip_${counter}.mp3" ]; do counter=$((counter + 1)); done
     out="${base}_clip_${counter}.mp3"
     ffmpeg -i "$input" -ss "$start" -to "$end" -ar 44100 -ac 2 -ab 192k -f mp3 "$out"
@@ -42,156 +44,138 @@ function exc() {
     input="$1"
     start="$2"
     end="$3"
-    base="${input%.*}"       # Remove extension
-    ext="${input##*.}"       # Get extension
+    base="${input%.*}"   # Remove extension
+    ext="${input##*.}"   # Get extension
     counter=1
 
-    # Find next available filename
+# Find next available filename
     while [ -e "${base}_clip_${counter}.${ext}" ]; do counter=$((counter + 1)); done
     out="${base}_clip_${counter}.${ext}"
     ffmpeg -i "$input" -ss "$start" -to "$end" -c copy "$out"
 }
 
 
+function to_mp3() {
+# Converts input audio files to MP3 format with a bitrate of 256 kbps.
+# Example: to_mp3 *.wav
+for input_file in "$@"; do
+  if [ -f "$input_file" ]; then
+    local output_file="${input_file%.*}.mp3"  # Change to .mp3 based on input file extension
+    ffmpeg -i "$input_file" -ar 44100 -ac 2 -ab 256k -f mp3 "$output_file"
+    echo "Converted $input_file to $output_file"
+  else
+    echo "No such file found: $input_file"
+  fi
+done
+}
+
+
 function to_mp4() {
 # Converts input video files to MP4 format with a specified bitrate.
-# Example: ls *.mov | all | to_mp4 3000
-if [[ $# -ne 1 ]]; then
-echo "For converting all inputted video files to mp4 videos with your custom bitrate."
-echo "Usage example for all mov files in current folder: ls *.mov | all | tomp4 3000"
-echo "Usage example for one file: echo \"somevideo.mkv\" tomp4 3000"
-echo "... converts the file(s) to mp4 with 3000 kbps and automatically 256kbps AAC audio."
-return 1
+# Example: to_mp4 3000 *.mov
+if [[ $# -lt 2 ]]; then
+    echo "For converting input video files to MP4 format with your custom bitrate."
+    echo "Usage example for all .mov files in the current folder: to_mp4 3000 *.mov"
+    echo "Usage example for one file: to_mp4 3000 somevideo.mkv"
+    echo "... converts the file(s) to MP4 with specified bitrate and automatically 256kbps AAC audio."
+    return 1
 fi
-bitrate="$1"
-files=()
-while IFS= read -r file; do files+=("$file"); done   # Read all input into an array
-total=${#files[@]}
-count=0
-for file in "${files[@]}"; do
-count=$((count + 1))
-output="${file%.*}.mp4"
-echo -ne "\r[$count/$total] Converting: $file -> $output"
-ffmpeg -loglevel error -y -i "$file" -c:v libx264 -b:v "${bitrate}k" -c:a aac -strict experimental -b:a 256k "$output"
-echo -ne "\r[$count/$total] Done:   $file -> $output\n"
+local bitrate="$1"
+shift  # Remove the first argument (bitrate) from the list of arguments
+local total="$#"
+local count=0
+for file in "$@"; do
+  if [ -f "$file" ]; then
+     count=$((count + 1))
+     local output="${file%.*}.mp4"
+     echo -ne "\r[$count/$total] Converting: $file -> $output"
+     ffmpeg -loglevel error -y -i "$file" -c:v libx264 -b:v "${bitrate}k" -c:a aac -strict experimental -b:a 256k "$output"
+     echo -ne "\r[$count/$total] Done:   $file -> $output\n"
+  else
+     echo "No such file found: $file"
+  fi
 done
 echo "All conversions complete!"
 }
 
 
+
+# ------------ IMAGE PROCESSING ----------------
+
 function to_gif() {
-# Converts an input video file to GIF format.
-# Example: echo "video file.mp4" | to_gif
-if [[ $# -ne 1 ]]; then
-echo "For converting inputted video file to GIF format."
-echo "Usage example: echo \"video file.mp4\" | togif"
-return 1
+# Converts input video files to GIF format.
+# Example: to_gif *.mp4
+if [[ $# -lt 1 ]]; then
+  echo "For converting input video files to GIF format."
+  echo "Usage example: to_gif video_file.mp4"
+  return 1
 fi
-while IFS= read -r file; do
-output="${file%.*}.gif"
-echo "Converting '$file' to '$output'..."
-ffmpeg -t 10 -i "$file" -vf "fps=15,scale=640:-1:flags=lanczos" "$output"
+local count=0
+local total="$#"
+for file in "$@"; do
+if [ -f "$file" ]; then
+  count=$((count + 1))
+  local output="${file%.*}.gif"
+  echo "Converting '$file' to '$output'..."
+  ffmpeg -t 10 -i "$file" -vf "fps=15,scale=640:-1:flags=lanczos" "$output"
+  echo "Done: '$file' -> '$output'"
+else
+  echo "No such file found: $file"
+fi
 done
+echo "All conversions complete!"
 }
 
 
 function to_png() {
-# Converts an input image file to PNG format.
-# Example: echo "photo 1.jpg" | to_png
-if [[ $# -ne 1 ]]; then
-echo "For converting inputted image file to PNG format."
-echo "Usage example: echo \"photo 1.jpg\" | topng"
-return 1
+# Converts input image files to PNG format.
+# Example: to_png *.jpg
+if [[ $# -lt 1 ]]; then
+  echo "For converting input image files to PNG format."
+  echo "Usage example: to_png photo1.jpg"
+  return 1
 fi
-while IFS= read -r file; do
-output="${file%.*}.png"
-convert "$file" "$output"
+local count=0
+local total="$#"
+for file in "$@"; do
+if [ -f "$file" ]; then
+  count=$((count + 1))
+  local output="${file%.*}.png"
+  echo "Converting '$file' to '$output'..."
+  convert "$file" "$output"
+  echo "Done: '$file' -> '$output'"
+else
+  echo "No such file found: $file"
+fi
 done
+echo "All conversions complete!"
 }
 
 
 function to_jpg() {
-# Converts an input image file to JPG format.
-# Example: echo "photo 1.png" | to_jpg
-if [[ $# -ne 1 ]]; then
-echo "For converting inputted image file to JPG format."
-echo "Usage example: echo \"photo 1.png\" | tojpg"
-return 1
+# Converts input image files to JPG format.
+# Example: to_jpg *.png
+if [[ $# -lt 1 ]]; then
+  echo "For converting input image files to JPG format."
+  echo "Usage example: to_jpg photo1.png"
+  return 1
 fi
-while IFS= read -r file; do
-output="${file%.*}.jpg"
-convert "$file" "$output"
+local count=0
+local total="$#"
+for file in "$@"; do
+if [ -f "$file" ]; then
+  count=$((count + 1))
+  local output="${file%.*}.jpg"
+  echo "Converting '$file' to '$output'..."
+  convert "$file" "$output"
+  echo "Done: '$file' -> '$output'"
+else
+  echo "No such file found: $file"
+fi
 done
+echo "All conversions complete!"
 }
 
-
-
-function cutvideo() {
-# Cuts a segment from a video file between specified start and end times.
-# Example: cutvideo "filename.mp4" 00:00:05 00:02:00
-if [[ $1 == "" ]]; then
- echo "Example usage: cutvideo \"filename.mp4\" 00:00:05 00:02:00"
-else
- local file="$1"
- local starttime="$2"
- local endtime="$3"
- if [ -f "$file" ]; then
- ffmpeg -ss $starttime -i "$1" -to $endtime -c copy "cut_$filename"
- else
-  echo "$file cannot be found. Doublecheck the filename and its path. Or if the file contains spaces, use the quote marks like this: cutvideo \"this file.mp4\""
- fi
-fi
-}
-
-
-function cutaudio() {
-# Cuts a segment from an audio file between specified start and end times.
-# Example: cutaudio "filename.mp3" 00:00:05 00:02:00
-if [[ $1 == "" ]]; then
- echo "Example usage: cutaudio \"filename.mp3\" 00:00:05 00:02:00"
-else
- local file="$1"
- local starttime="$2"
- local endtime="$3"
- if [ -f "$file" ]; then
- ffmpeg -ss $starttime -i "$1" -to $endtime -c copy "cut_$filename"
- else
-  echo "$file cannot be found. Doublecheck the filename and its path. Or if the file contains spaces, use the quote marks like this: cutvideo \"this file.mp3\""
- fi
-fi
-}
-
-
-function toclipboard() {
-# Copies variable content, text, image or file contents to the clipboard, ready to be pasted (with Ctrl+V).
-# Example for text: echo "Hello, World!" | toclipboard
-# Example for image: ls zoom.png | toclipboard
-
-input=$(cat)     # Read input from stdin or a pipe
-if [[ -f "$input" ]]; then    # Check if the input is a file and exists
-case "$input" in
-    *.png)
-        xclip -selection clipboard -t image/png -i "$input"
-        ;;
-    *.jpg | *.jpeg)
-        convert "$input" png:- | xclip -selection clipboard -t image/png
-        ;;
-    *.mp4 | *.MP4)
-        echo -n "$input" | xclip -selection clipboard    # Copy the file path to clipboard
-        ;;
-    *)
-        xclip -selection clipboard -i "$input"   # Copy file contents to clipboard as text
-        ;;
-esac
-else
-echo "$input" | xclip -selection clipboard   # If it's not a file, copy the input as plain text
-fi
-}
-
-
-
-
-# ------------ IMAGE PROCESSING ----------------
 
 function generateQR() {
 # Generates a QR code image file from an input text, link or some other strings.
@@ -334,6 +318,41 @@ done
 }
 
 
+function jpg2txt_allincwd() {
+# Extracts data into text files from image files or pdf files, inside the current folder.
+# Example: jpg2txt_allincwd *.pdf
+# Example: jpg2txt_allincwd *.jpg
+pattern="${1:-*.jpg}"       # Check if an argument is passed, otherwise default to *.jpg
+for f in $pattern; do pdf2txt_OCR "$f" "$f"; done   # Loop through the files based on the provided pattern
+}
+
+
+function toclipboard() {
+# Copies variable content, text, image or file contents to the clipboard, ready to be pasted (with Ctrl+V).
+# Example for text: echo "Hello, World!" | toclipboard
+# Example for image: ls zoom.png | toclipboard
+
+input=$(cat) # Read input from stdin or a pipe
+if [[ -f "$input" ]]; then # Check if the input is a file and exists
+case "$input" in
+    *.png)
+        xclip -selection clipboard -t image/png -i "$input"
+        ;;
+    *.jpg | *.jpeg)
+        convert "$input" png:- | xclip -selection clipboard -t image/png
+        ;;
+    *.mp4 | *.MP4)
+        echo -n "$input" | xclip -selection clipboard# Copy the file path to clipboard
+        ;;
+    *)
+        xclip -selection clipboard -i "$input"   # Copy file contents to clipboard as text
+        ;;
+esac
+else
+echo "$input" | xclip -selection clipboard   # If it's not a file, copy the input as plain text
+fi
+}
+
 
 # ------------ DOCUMENTS PROCESSING ------------
 
@@ -372,16 +391,6 @@ libreoffice --headless --convert-to docx --outdir "$folder" "$file"
 else
 echo "Please make sure to have LibreOffice installed for this function to work."
 fi
-}
-
-
-
-function jpg2txt_allincwd() {
-# Extracts data into text files from image files or pdf files, inside the current folder.
-# Example: jpg2txt_allincwd *.pdf
-# Example: jpg2txt_allincwd *.jpg
-pattern="${1:-*.jpg}"                               # Check if an argument is passed, otherwise default to *.jpg
-for f in $pattern; do pdf2txt_OCR "$f" "$f"; done   # Loop through the files based on the provided pattern
 }
 
 

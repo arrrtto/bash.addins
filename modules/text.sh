@@ -2,7 +2,7 @@
 
 # Text/Numbers processing module
 MODULE_NAME="text"
-MODULE_VERSION="1.04"
+MODULE_VERSION="1.06"
 MODULE_DESCRIPTION="Text processing and RegEx functions"
 
 
@@ -154,6 +154,7 @@ sed 's/[^a-zA-Z0-9]//g'
 
 
 function sed_keep_numbers() {
+# Keeps only numbers in output.
 sed 's/[^0-9]//g'
 }
 
@@ -247,15 +248,11 @@ function sed_outputlinesbetween() {
 # and SED is a cool piece of software?
 # ----
 # cat file.txt | sed_outputlinesbetween Did ----
-if [ "$#" -ne 2 ]; then
-echo "Usage: sed_keeplinesbetween <start_word> <end_word>"
-return 1
-fi
+if [ "$#" -ne 2 ]; then echo "Usage: sed_keeplinesbetween <start_word> <end_word>"; return 1; fi
 local start_word="$1"
 local end_word="$2"
 sed -n "/${start_word}/,/^${end_word}/!d" | sed "/^${end_word}/q"
 }
-
 
 
 
@@ -349,7 +346,6 @@ awk "{match(\$0, /$start .*?$end/, m); if (m[0]) print m[0]}"
 function sortdown_colnum() {
 # Sorts input data by a specified column in descending numerical order.
 # Example: cat data.csv | sortdown_colnum 3    ; sorting based on the column number 3
-local col=${1?Usage example: sortdown_colnum 3}
 col="$1"
 awk -F',' -v col="$col" '{ print $col "|" $0 }' | sort -t'|' -k1,1n | cut -d'|' -f2-
 }
@@ -358,7 +354,6 @@ awk -F',' -v col="$col" '{ print $col "|" $0 }' | sort -t'|' -k1,1n | cut -d'|' 
 function sortup_colnum() {
 # Sorts input data by a specified column in ascending numerical order.
 # Example: cat data.csv | sortup_colnum 3    ; sorting based on the column number 3
-local col=${1?Usage example: sortup_colnum 3}
 col="$1"
 awk -F',' -v col="$col" '{ print $col "|" $0 }' | sort -t'|' -k1,1nr | cut -d'|' -f2-
 }
@@ -367,7 +362,6 @@ awk -F',' -v col="$col" '{ print $col "|" $0 }' | sort -t'|' -k1,1nr | cut -d'|'
 function sortdown_abs_colnum() {
 # Sorts input data by a specified column in descending order, treating negative values as positive.
 # Example: cat data.csv | sortdown_abs_colnum 3
-local col=${1?Usage example: sortdown_abs_colnum 3}
 col="$1"
 awk -F',' -v col="$col" '{
   a = $col
@@ -380,7 +374,6 @@ awk -F',' -v col="$col" '{
 function sortup_abs_colnum() {
 # Sorts input data by a specified column in ascending order, treating negative values as positive.
 # Example: cat data.csv | sortup_abs_colnum 3
-local col=${1?Usage example: sortup_abs_colnum 3}
 col="$1"
 awk -F',' -v col="$col" '{
   a = $col
@@ -393,10 +386,8 @@ awk -F',' -v col="$col" '{
 function sort_col() {
 # Sorts input data by a specified column number, either numerically or alphabetically, based on the mode (up or down).
 # Example: cat data.csv | sort_col 2 up
-local col=${1?Usage example: sort_col 3 up}
 # sort_col 2 up - sorts A-Z, if used non-numerical, but words
 # sort_col 2 down - sorts Z-A
-# 
 col="$1"
 mode="$2"
 
