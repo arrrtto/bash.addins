@@ -10,21 +10,27 @@ function focus_window() {
 # Brings a selected app window to the front, making it the active window.
 # Example: focus_window chromium
 if [ -z "$1" ]; then cat $bashaddinsfile | grep -E "function ${FUNCNAME[0]}" -A 2 | grep -oP '# .*'; return; fi
-xdotool search --onlyvisible --class $1 windowactivate && sleep 1
+xdotool search --onlyvisible --class $1 windowactivate
+if [ "$?" == "0" ]; then local state="Success"; else local state="Failed"; fi
+sleep 1
 }
 
 function minimize_app() {
 # Minimizes a window of a specified application by name.
 # Example: minimize_app firefox
 if [ -z "$1" ]; then cat $bashaddinsfile | grep -E "function ${FUNCNAME[0]}" -A 2 | grep -oP '# .*'; return; fi
-xdotool search --name $1 windowminimize && sleep 1
+xdotool search --name $1 windowminimize
+if [ "$?" == "0" ]; then local state="Success"; else local state="Failed"; fi
+sleep 1
 }
 
 function maximize_app() {
 # Maximizes a window of a specified application by name.
 # Example: maximize_app firefox
 if [ -z "$1" ]; then cat $bashaddinsfile | grep -E "function ${FUNCNAME[0]}" -A 2 | grep -oP '# .*'; return; fi
-xdotool search --name $1 windowactivate windowsize 100% 100% && sleep 1
+xdotool search --name $1 windowactivate windowsize 100% 100%
+if [ "$?" == "0" ]; then local state="Success"; else local state="Failed"; fi
+sleep 1
 }
 
 function get_window_info() {
@@ -33,7 +39,9 @@ function get_window_info() {
 # Usage example: get_window_info firefox
 # PS: this function depends on focus_window in its workings.
 if [ -z "$1" ]; then cat $bashaddinsfile | grep -E "function ${FUNCNAME[0]}" -A 4 | grep -oP '# .*'; return; fi
-focus_window "$1" & sleep 0.5
+focus_window "$1"
+if [ "$?" == "0" ]; then local state="Success"; else local state="Failed"; fi
+sleep 0.5
 window_id=$(xdotool getactivewindow)
 xwininfo -id $window_id | awk '/Absolute upper-left X:/ { print "X: " $4 }'
 xwininfo -id $window_id | awk '/Absolute upper-left Y:/ { print "Y: " $4 }'

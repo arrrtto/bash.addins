@@ -174,9 +174,9 @@ df -h | grep "^/" | grep -Ev "boot" | awk '{print "Free space on", $1":", $4"B"}
 }
 
 
-function check_process() {
+function process_check() {
 # Checks if a specified app (process) is running and outputs its status.
-# Example: check_process brave    ; outputs "'$process' is running."
+# Example: process_check brave    ; outputs "'$process' is running."
 local process="$1"
 if pgrep -x "$process" > /dev/null; then
   echo "$process is running"
@@ -186,9 +186,9 @@ fi
 }
 
 
-function kill_process() {
+function process_kill() {
 # Kills a specified process by name.
-# Example: kill_process chromium
+# Example: process_kill chromium
 pid=$(pgrep -f $1) # Find the PID of the given process
 # Send a SIGTERM signal (graceful close)
 if [[ ! -z "$pid" ]]; then kill -SIGTERM "$pid"; fi
@@ -262,4 +262,21 @@ else
  echo "No .crdownload files found, so possibly nothing is downloading to Downloads folder at the moment."
 fi
 }
+
+
+function press() {
+# Function for sending a keyboard stroke with xdotool (to the currently focused window). 
+# Ex.: press "alt+r", "Control_L+J", "ctrl+alt+n", BackSpace, space, shift, super, meta, Return, F2, Up, Down
+# Ex.: to send Ctrl+L and then BackSpace as separate keystrokes one after another: press ctrl+l BackSpace
+xdotool key "$@"
+}
+
+function type_into() {
+xdotool type "$@"
+}
+
+function enter_text() {
+xdotool type "$@"
+}
+
 
