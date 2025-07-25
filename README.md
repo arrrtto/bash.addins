@@ -12,8 +12,10 @@ Adding "source bash.addins" command can also be added into own local BASH script
 BASH Addins is a work in progress and far from "complete". It already does a lot, even though there may be bugs or missing features :)
 Happy using, and contributing via GitHub, if you want to help make BASH Addins better! :)
 
+
 ## Dependencies as of right now
 qrencode ffmpeg wget sane-utils imagemagick ghostscript xdotool curl csvkit imagemagick wmctrl xclip x11-apps tesseract-ocr scrot gnome-screenshot jq python3-full python3-xlsxwriter python3-openpyxl python3-odf python3-pdfkit csvkit html2text docx2txt xlsx2csv mupdf unoconv libreoffice libreoffice-script-provider-python sox pdftk
+
 
 ## Features / Modules
 :: BASH Addins is organized into several modules, that contain functions/aliases that get combined into the bash.addins file, when running ./installer setup or ./installer compile
@@ -31,7 +33,7 @@ qrencode ffmpeg wget sane-utils imagemagick ghostscript xdotool curl csvkit imag
 
 1. Download the installer:
 ```bash
-wget https://raw.githubusercontent.com/arrrtto/bash.addins/main/installer
+wget https://github.com/arrrtto/bash.addins/blob/main/installer
 ```
 
 2. Make the installer script executable:

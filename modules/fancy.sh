@@ -9,6 +9,11 @@ MODULE_DESCRIPTION="Other type of cool or fancy functions"
 # --- WGET DOWNLOAD WITH PROGRESS BAR CODE BEGIN ------
 function gradient_progress_bar() {
 # Function to print a gradient progress bar based on a given percentage. Meant to be used by wget_progressbar function.
+if [ -z "$1" ]; then
+local func_name="${FUNCNAME[0]}"
+cat $bashaddinsfile | grep -E "function $func_name" -A 3 | grep -oP '# .*'
+return
+fi
 local percent=$1
 local total_steps=50
 local filled_steps=$((percent * total_steps / 100))
@@ -24,8 +29,13 @@ for ((j=filled_steps; j<total_steps; j++)); do progress_bar+=" "; done  # Fill t
 printf "\r${progress_bar} ${percent}%%"
 }
 
-function gradient_text() {
-# Meant to be used by wget_progressbar function.
+function gradient_in() {
+# Meant to be used by gradient_text function, not separately.
+if [ -z "$1" ]; then
+local func_name="${FUNCNAME[0]}"
+cat $bashaddinsfile | grep -E "function $func_name" -A 3 | grep -oP '# .*'
+return
+fi
 local text="$1"
 local start_r="$2"  # Starting red color
 local start_g="$3"  # Starting green color
@@ -45,14 +55,30 @@ done
 echo  # Move to the next line after printing the text
 }
 
+function gradient_text() {
+# Function for outputting gradient text in Terminal, from one RGB color to another.
+# Example usage: gradient_text "Some text here"
+if [ -z "$1" ]; then
+local func_name="${FUNCNAME[0]}"
+cat $bashaddinsfile | grep -E "function $func_name" -A 3 | grep -oP '# .*'
+return
+fi
+start_color=(35 206 255) #RGB values
+end_color=(100 112 240) #RGB values
+gradient_in "$1" "${start_color[0]}" "${start_color[1]}" "${start_color[2]}" "${end_color[0]}" "${end_color[1]}" "${end_color[2]}"
+}
+
 function wget_progressbar() {
 # Function for downloading a file with wget and displaying only a fancy gradient progress bar, plus download percentage.
 # The argument needs to be an URL (link)
 # Example usage: wget_progressbar "https://github.com/Qortal/qortal/releases/latest/download/qortal.zip"
-gt_start_color=(35 206 255)  # Define the starting color (RGB) for gradient text - Sky blue
-gt_end_color=(100 112 240) # Define the ending color (RGB) for gradient text - Lilac
+if [ -z "$1" ]; then
+local func_name="${FUNCNAME[0]}"
+cat $bashaddinsfile | grep -E "function $func_name" -A 3 | grep -oP '# .*'
+return
+fi
 local file=$(echo "$1" | awk -F '/' '{print $NF}')
-gradient_text "Downloading $file, please wait" "${gt_start_color[0]}" "${gt_start_color[1]}" "${gt_start_color[2]}" "${gt_end_color[0]}" "${gt_end_color[1]}" "${gt_end_color[2]}"
+gradient_text "Downloading $file, please wait"
 wget "$1" 2>&1 | while read -r line; do
 if [[ $line =~ ([0-9]+)% ]]; then
 percent=${BASH_REMATCH[1]}
@@ -63,6 +89,5 @@ done
 echo -e '\n'
 }
 # --- WGET DOWNLOAD WITH PROGRESS BAR CODE END ------
-
 
 

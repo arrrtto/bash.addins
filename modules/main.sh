@@ -1,5 +1,7 @@
 #!/bin/bash
 
+bashaddinsfile=$(which bash.addins)
+
 # Main functions for the bash addins for the beginning of the file
 
 function showallfunctions() {
