@@ -124,7 +124,7 @@ ba_compile
 ba_tobin
 add_to_bashrc
 reload
-echo "Setup complete! BASH Add-ins now in use. Enjoy!"
+gradient_text "Setup complete! BASH Add-ins now in use. Enjoy!"
 }
 
 
