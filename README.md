@@ -33,7 +33,7 @@ qrencode ffmpeg wget sane-utils imagemagick ghostscript xdotool curl csvkit imag
 
 1. Download the installer:
 ```bash
-wget https://github.com/arrrtto/bash.addins/blob/main/installer
+wget https://raw.githubusercontent.com/arrrtto/bash.addins/refs/heads/main/installer
 ```
 
 2. Make the installer script executable:
