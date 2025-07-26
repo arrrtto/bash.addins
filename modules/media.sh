@@ -181,7 +181,7 @@ function generateQR() {
 # Generates a QR code image file from an input text, link or some other strings.
 # Usage: generateQR "https://qortal.dev"
 # Outputs the file to Home folder as QR.png
-# Pro Tip: generateQR "https://qortal.dev" | ls /home/$USER/QR.png | toclipboard
+# Pro Tip: generateQR "https://qortal.dev" && ls /home/$USER/QR.png | toclipboard
 # This puts the generated QR code image to the Clipboard, ready to be pasted :)
 if [[ $# -ne 1 ]]; then
 echo "For generating QR code out of any text or input. The generated QR-code image file (QR.png) will end up in your home folder."

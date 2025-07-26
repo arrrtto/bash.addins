@@ -9,11 +9,6 @@ MODULE_DESCRIPTION="Other type of cool or fancy functions"
 # --- WGET DOWNLOAD WITH PROGRESS BAR CODE BEGIN ------
 function gradient_progress_bar() {
 # Function to print a gradient progress bar based on a given percentage. Meant to be used by wget_progressbar function.
-if [ -z "$1" ]; then
-local func_name="${FUNCNAME[0]}"
-cat $bashaddinsfile | grep -E "function $func_name" -A 1 | grep -oP '# .*'
-return
-fi
 local percent=$1
 local total_steps=50
 local filled_steps=$((percent * total_steps / 100))
