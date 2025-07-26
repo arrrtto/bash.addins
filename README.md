@@ -23,6 +23,7 @@ qrencode ffmpeg wget sane-utils imagemagick ghostscript xdotool curl csvkit imag
 - `main.sh`: Basic stuff for the bash.addins to work
 - `aliases.sh`: Contains various useful aliases to use in Terminal
 - `system.sh`: System utilities and process management
+- `fancy.sh`: Fancy cool functions for extra enjoyment
 - `text.sh`: Text processing and RegEx functions
 - `gui.sh`: GUI window management
 - `media.sh`: Audio/Video/Image processing
