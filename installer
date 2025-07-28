@@ -3,7 +3,7 @@
 # BASH Addins - the library of custom functions and aliases for enhanced BASH scripting and Terminal usage.
 # Started by Artto Aunap (https://github.com/arrrtto) in 2025 for personal use, but in 2025 decided to share with the GNU/Linux and FOSS community.
 
-BA_VERSION="1.06"
+BA_VERSION="1.07"
 BA_DESCRIPTION="Enhanced BASH scripting library"
 BA_AUTHOR="Artto Aunap"
 BA_LICENSE="MIT"
