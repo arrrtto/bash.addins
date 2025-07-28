@@ -341,11 +341,8 @@ case "$input" in
     *.jpg | *.jpeg)
         convert "$input" png:- | xclip -selection clipboard -t image/png
         ;;
-    *.mp4 | *.MP4)
-        echo -n "$input" | xclip -selection clipboard  # Copy the file path to clipboard
-        ;;
     *)
-        xclip -selection clipboard -i "$input"   # Copy file contents to clipboard as text
+        echo -n "$input" | xclip -selection clipboard  # Copy the file path to clipboard, if any other file type
         ;;
 esac
 else
