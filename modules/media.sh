@@ -342,7 +342,7 @@ case "$input" in
         convert "$input" png:- | xclip -selection clipboard -t image/png
         ;;
     *.mp4 | *.MP4)
-        echo -n "$input" | xclip -selection clipboard# Copy the file path to clipboard
+        echo -n "$input" | xclip -selection clipboard  # Copy the file path to clipboard
         ;;
     *)
         xclip -selection clipboard -i "$input"   # Copy file contents to clipboard as text
