@@ -123,7 +123,7 @@ download_modules
 ba_compile
 ba_tobin
 add_to_bashrc
-reload
+source bash.addins
 gradient_text "Setup complete! BASH Add-ins now in use. Enjoy!"
 }
 
