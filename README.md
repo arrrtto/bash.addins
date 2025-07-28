@@ -74,6 +74,9 @@ There will also be a demonstrational video made soon on how to use BASH Addins a
 4. Push to the branch
 5. Open a Pull Request
 
+## Video demo
+https://odysee.com/@A-Computer-Service:e/bash.addins:6
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details. Overall it is free software, as defined by Free Software Foundation - free to modify, to benefit humanity.
