@@ -2,7 +2,7 @@
 
 # Fancy stuff module - started on 24.07.2025 by Artto
 MODULE_NAME="fancy"
-MODULE_VERSION="1.06"
+MODULE_VERSION="1.07"
 MODULE_DESCRIPTION="Other type of cool or fancy functions"
 
 
@@ -26,11 +26,6 @@ printf "\r${progress_bar} ${percent}%%"
 
 function gradient_in() {
 # Meant to be used by gradient_text function, not separately.
-if [ -z "$1" ]; then
-local func_name="${FUNCNAME[0]}"
-cat $bashaddinsfile | grep -E "function $func_name" -A 1 | grep -oP '# .*'
-return
-fi
 local text="$1"
 local start_r="$2"  # Starting red color
 local start_g="$3"  # Starting green color
