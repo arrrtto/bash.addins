@@ -3,7 +3,7 @@
 # BASH Addins - the library of custom functions and aliases for enhanced BASH scripting and Terminal usage.
 # Started by Artto Aunap (https://github.com/arrrtto) in 2025 for personal use, but in 2025 decided to share with the GNU/Linux and FOSS community.
 
-BA_VERSION="1.07"
+BA_VERSION="1.08"
 BA_DESCRIPTION="Enhanced BASH scripting library"
 BA_AUTHOR="Artto Aunap"
 BA_LICENSE="MIT"
@@ -53,15 +53,11 @@ function ba_compile() {
 OUTPUT_FILE="bash.addins"   # Define the output file name to be generated: bash.addins
 echo "#!/bin/bash" > "$OUTPUT_FILE"  # Create the bash.addins file and add shebang as the first line
 sed -n '1!{/^BA_VERSION=/q;p}' "$BA_INSTALLERFILE" >> "$OUTPUT_FILE"  # Add the contents from installer file from the second line to BA_VERSION line into the bash.addins file 
-# Append the modules
+# Append the modules, starting with main, aliases and system, then add others dynamically
 append_module "modules/main.sh"
 append_module "modules/aliases.sh"
 append_module "modules/system.sh"
-append_module "modules/gui.sh"
-append_module "modules/text.sh"
-append_module "modules/media.sh"
-append_module "modules/fancy.sh"
-append_module "modules/crypto.sh"
+for module_file in $(ls modules | grep -Ev "main|aliases|system"); do append_module "modules/$module_file"; done
 chmod +x "$OUTPUT_FILE"  # Make bash.addins file executable
 echo "$OUTPUT_FILE file generated to the current folder."
 }
@@ -104,14 +100,8 @@ if [[ ! -d ./modules ]]; then  # If modules folder does not exist, create it and
 echo "Downloading modules..."
 mkdir modules
 cd modules
-wget -q https://raw.githubusercontent.com/arrrtto/bash.addins/main/modules/aliases.sh
-wget -q https://raw.githubusercontent.com/arrrtto/bash.addins/main/modules/crypto.sh
-wget -q https://raw.githubusercontent.com/arrrtto/bash.addins/main/modules/main.sh
-wget -q https://raw.githubusercontent.com/arrrtto/bash.addins/main/modules/gui.sh
-wget -q https://raw.githubusercontent.com/arrrtto/bash.addins/main/modules/media.sh
-wget -q https://raw.githubusercontent.com/arrrtto/bash.addins/main/modules/text.sh
-wget -q https://raw.githubusercontent.com/arrrtto/bash.addins/main/modules/system.sh
-wget -q https://raw.githubusercontent.com/arrrtto/bash.addins/main/modules/fancy.sh
+modulefileslist=$(curl -s "https://github.com/arrrtto/bash.addins/tree/main/modules" | grep -oP '\w+\.sh' | awk '!seen[$0]++')
+for modulefile in $modulefileslist; do wget -q https://raw.githubusercontent.com/arrrtto/bash.addins/main/modules/$modulefile; done
 cd ..
 fi
 }

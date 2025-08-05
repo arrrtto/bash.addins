@@ -10,3 +10,6 @@ function crypto_fearandgreedindex() {
 # Gets the current crypto fear and greed index via API.
 curl -s "https://api.alternative.me/fng/" | jq -r '.data[0] | "Fear & Greed Index: \(.value) (\(.value_classification))"'
 }
+
+
+

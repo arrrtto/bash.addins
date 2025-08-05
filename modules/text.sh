@@ -2,7 +2,7 @@
 
 # Text/Numbers processing module
 MODULE_NAME="text"
-MODULE_VERSION="1.06"
+MODULE_VERSION="1.08"
 MODULE_DESCRIPTION="Text processing and RegEx functions"
 
 
@@ -60,7 +60,14 @@ grep -E -o '(\+?[0-9]{1,3}[-. ]?)?(\(?[0-9]{2,4}\)?[-. ]?)?[0-9]{3,4}[-. ][0-9]{
 function regex_date() {
 # Extracts various date formats like DD-MM-YYYY, YYYY/MM/DD, DD.MM.YYYY, etc.
 # Example: echo "Date: 14.05.2022" | regex_date → 14.05.2022
-grep -E -o '\b([0-9]{2,4})([./-])[0-9]{1,2}\2[0-9]{1,4}\b'
+grep -E -o '[0-9]{4}[./-][0-9]{2}[./-][0-9]{2}|[0-9]{2}[./-][0-9]{2}[./-][0-9]{4}'
+}
+
+
+function regex_time() {
+# Extracts time from input text.
+# Example: echo "2025-05-26T18:04:59+00:00" | regex_time → 18:04:59
+grep -E -o '[0-9]{2}:[0-9]{2}:[0-9]{2}?'
 }
 
 
@@ -239,7 +246,7 @@ sed 's/\x1b\[[0-9;]*m//g'
 }
 
 
-function sed_outputlinesbetween() {
+function sed_keeplinesbetween() {
 # Outputs only the lines between certain keywords, taking in as parameters the starting line keyword and the ending line keyword.
 # Example: Let's say you have a file.txt with these lines:
 # Hey brother,
@@ -247,7 +254,7 @@ function sed_outputlinesbetween() {
 # that this is some text
 # and SED is a cool piece of software?
 # ----
-# cat file.txt | sed_outputlinesbetween Did ----
+# cat file.txt | sed_keeplinesbetween Did ----
 if [ "$#" -ne 2 ]; then echo "Usage: sed_keeplinesbetween <start_word> <end_word>"; return 1; fi
 local start_word="$1"
 local end_word="$2"
@@ -325,6 +332,15 @@ local start=${1?Need the starting word and ending word}
 local start="$1"
 local end="$2"
 awk "{match(\$0, /$start .*?$end/, m); if (m[0]) print m[0]}"
+}
+
+
+function sed_keep_between_xml() {
+# Keeps only the part of data between XML format data like <something>data</something>
+# Example: echo "<title>New video</title>" | sed_keep_betweenxmlwords "title"
+# outputs to: "New video"
+local start=${1?Need the word that is inside the <> brackets}
+grep -E "<$1>" | sed -E "s:.*<$1>(.*)</$1>.*:\1:"
 }
 
 
