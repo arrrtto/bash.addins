@@ -411,3 +411,19 @@ done
 }
 
 
+
+# ------------ VARIA ----------------
+
+function yt-downloadthumbnail() {
+# Function to download the thumbnail of the video from YouTube
+local link="$1"
+if [[ -z "$link" ]]; then
+echo "Function to download the thumbnail of the video from YouTube."
+echo "Usage example: yt-downloadthumbnail https://www.youtube.com/watch?v=vJabNEwZIuc"
+return 1
+fi
+ytid=$(echo $link | regex_youtube_id)
+thumbnail="https://i.ytimg.com/vi/$ytid/maxresdefault.jpg"
+wget -q "$thumbnail"
+mv ./maxresdefault.jpg $ytid.jpg
+}
