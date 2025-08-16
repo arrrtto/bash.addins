@@ -64,7 +64,7 @@ showaliases
 
 Each module has its own documentation and versioning info inside the module files themselves. Check the specific module documentation for detailed usage instructions or run showallfunctions or showaliases
 
-There will also be a demonstrational video made soon on how to use BASH Addins and its various functionalities. The link will also be updated here into this Readme by Artto.
+Here is a demonstrational video: https://odysee.com/@A-Computer-Service:e/bash.addins:6
 
 ## Contributing
 
