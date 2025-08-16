@@ -2,7 +2,7 @@
 
 # Media module
 MODULE_NAME="media"
-MODULE_VERSION="1.06"
+MODULE_VERSION="1.07"
 MODULE_DESCRIPTION="Audio/video/image processing functions"
 
 
@@ -390,5 +390,24 @@ echo "Please make sure to have LibreOffice installed for this function to work."
 fi
 }
 
+
+# ------------ AUDIO PROCESSES ----------------
+
+function is_audio_playing() {
+# Function to check if any application is currently producing audio output
+# And if so, do something, e.g. close that window/application
+echo "Waiting for audio output..."
+while true; do
+audioapp=$(pactl list sink-inputs | awk -F\" '/application.process.binary/ {print $2}')  # get the name of the process playing audio
+if [[ $audioapp != "" ]]; then  # if $audioapp is not empty, but something was found, then ...
+playtime=$(date | regex_time)
+echo "Audio detected from $audioapp at $playtime"
+sleep 2
+window close $audioapp  # In this case we could just close that process/app window to stop playing
+break
+fi
+sleep 1 && clear
+done
+}
 
 
