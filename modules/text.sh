@@ -263,6 +263,75 @@ sed -n "/${start_word}/,/^${end_word}/!d" | sed "/^${end_word}/q"
 
 
 
+function sed_keepline() {
+# Keeps only the certain row/line from the input text.
+if [ "$#" -ne 1 ]; then echo "Usage example: sed_keepline 2"; return 1; fi
+local rownumber="$1"
+sed -n "${rownumber}p"
+}
+
+
+function sed_keeplinesrange() {
+# Keep a range of lines
+if [ "$#" -ne 2 ]; then echo "Usage: sed_keeplinesrange <start_line_number> <end_line_number>"; return 1; fi
+local start="$1"
+local end="$2"
+sed -n "${start},${end}p"
+}
+
+# Delete a specific line
+function sed_removeline() {
+if [ "$#" -ne 1 ]; then echo "Usage: sed_removeline <line_number_number>"; return 1; fi
+local row="$1"
+sed "${row}d"
+}
+
+
+function sed_removelastline() {
+# Delete the last line
+sed '$d'
+}
+
+
+function sed_removelinesrange() {
+# Delete a range of lines
+if [ "$#" -ne 2 ]; then echo "Usage: sed_removelinesrange <start_line_number> <end_line_number>"; return 1; fi
+local start="$1"
+local end="$2"
+sed "${start},${end}d"
+}
+
+
+function row() {
+# Multifunctional function to keep or delete/remove lines (rows) of the input text
+if [ "$#" -lt 2 ]; then echo "Usage: row <keep|delete> <line_number|start,end|first|last>"; echo "Example: inputtext | row keep 2"; echo "Example: inputtext | row delete first"; return 1; fi
+local mode="$1"
+local spec="$2"
+case "$spec" in
+        first) spec="1"
+        ;;
+        last) spec="\$"
+        ;;
+esac
+case "$mode" in
+    keep)
+        sed -n "${spec}p"
+        ;;
+    delete)
+        sed "${spec}d"
+        ;;
+    remove) # remove would do the same as delete
+        sed "${spec}d"
+        ;;
+    *)
+        echo "Error: mode must be 'keep' or 'delete' or 'remove'"
+        return 1
+        ;;
+esac
+}
+
+
+
 function regex_keep_number() {
 # Keeps only the numbers and dots (.) which are found from the input text.
 # Example: echo "The price is 0.54 USD" | regex_keep_number    ; Output: 0.54
@@ -342,6 +411,61 @@ function sed_keep_between_xml() {
 local start=${1?Need the word that is inside the <> brackets}
 grep -E "<$1>" | sed -E "s:.*<$1>(.*)</$1>.*:\1:"
 }
+
+
+function regex_jq() {
+# Function to simplify jq filtering with SQL-like syntax
+# Usage: echo "$json" | regex_jq where <field>=<value>|<field>~<regex> [where ...] get <target_field>
+# Supports multiple 'where' conditions combined with AND logic.
+# '=' for exact match, '~' for regex match.
+if [ "$#" -lt 3 ]; then
+echo "Function for extracting needed fields from JSON format."
+echo "Usage: regex_jq where <field>=<value> get <target_field>"
+echo ""
+echo "Let's say you have this input: { "id": "79997538", "name": "Bachelor.In.Paradise.S10E05.720p.HEVC.x265-MeGusta", "info_hash": "B067D418BE580B3140091F6A4BBD3F4E61ECB0C1" }"
+echo "and you want the name field which corresponds to the id field 79997538 or you want the respective info_hash field of some corresponding name field."
+echo "cat some.json | regex_jq where id=79997538 get name"
+echo "cat some.json | regex_jq where name=Bachelor.In.Paradise.S10E07.1080p.WEB.h264-EDITH get info_hash"
+echo ""
+echo "More examples:"
+echo "cat some.json | regex_jq where name~S10E05 get id"
+echo "cat some.json | regex_jq where status=vip where seeders=5 get name"
+echo "cat some.json | regex_jq where name~S10E0[45] where username=TvTeam get id"
+echo "cat some.json | regex_jq where name~"1080p.*HEVC.*MeGusta" get info_hash"
+echo ""
+return 1
+fi
+
+local jq_filter=""
+local get_field=""
+while [ "$#" -gt 0 ]; do
+case "$1" in
+    where)
+        local condition="$2"
+        shift 2
+        if [[ "$condition" == *"="* ]]; then
+            local field="${condition%%=*}"
+            local value="${condition#*=}"
+            jq_filter+="select(.${field}==\"${value}\")"
+        elif [[ "$condition" == *"~"* ]]; then
+            local field="${condition%%~*}"
+            local regex="${condition#*~}"
+            jq_filter+="select(.${field} | test(\"${regex}\"))"
+        fi
+        ;;
+    get)
+        get_field="$2"
+        shift 2
+        ;;
+    *)
+        shift
+        ;;
+esac
+done
+if [ -z "$get_field" ]; then echo "No target field specified with get"; return 1; fi
+jq -r ".[] | $jq_filter | .${get_field}"
+}
+
 
 
 # -- ADDITIONAL INFO ABOUT SORTING FUNCTIONS BELOW --
