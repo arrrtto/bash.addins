@@ -2,7 +2,7 @@
 
 # Text/Numbers processing module
 MODULE_NAME="text"
-MODULE_VERSION="1.08"
+MODULE_VERSION="1.09"
 MODULE_DESCRIPTION="Text processing and RegEx functions"
 
 
@@ -414,13 +414,14 @@ grep -E "<$1>" | sed -E "s:.*<$1>(.*)</$1>.*:\1:"
 
 
 function regex_jq() {
-# Function to simplify jq filtering with SQL-like syntax
-# Usage: echo "$json" | regex_jq where <field>=<value>|<field>~<regex> [where ...] get <target_field>
-# Supports multiple 'where' conditions combined with AND logic.
+# Function to simplify jq filtering with SQL-like syntax and logical operators
+# Usage: echo "$json" | regex_jq where <field>=<value>|<field>~<regex> [and|or <field>=<value>|<field>~<regex> ...] get <target_field>
+# Supports multiple 'where' conditions combined with AND and OR logic.
 # '=' for exact match, '~' for regex match.
 if [ "$#" -lt 3 ]; then
 echo "Function for extracting needed fields from JSON format."
 echo "Usage: regex_jq where <field>=<value> get <target_field>"
+echo "Usage: regex_jq where <field>=<value>|<field>~<regex> [and|or <field>=<value>|<field>~<regex> ...] get <target_field>"
 echo ""
 echo "Let's say you have this input: { "id": "79997538", "name": "Bachelor.In.Paradise.S10E05.720p.HEVC.x265-MeGusta", "info_hash": "B067D418BE580B3140091F6A4BBD3F4E61ECB0C1" }"
 echo "and you want the name field which corresponds to the id field 79997538 or you want the respective info_hash field of some corresponding name field."
@@ -430,41 +431,65 @@ echo ""
 echo "More examples:"
 echo "cat some.json | regex_jq where name~S10E05 get id"
 echo "cat some.json | regex_jq where status=vip where seeders=5 get name"
-echo "cat some.json | regex_jq where name~S10E0[45] where username=TvTeam get id"
+echo "cat some.json | regex_jq where name~S10E0[45] and where username=TvTeam get id"
 echo "cat some.json | regex_jq where name~"1080p.*HEVC.*MeGusta" get info_hash"
+echo "cat some.json | regex_jq where username~jaja and status=vip or status=other get name"
 echo ""
 return 1
 fi
-
-local jq_filter=""
+local jq_expr=""
+local operator=""
 local get_field=""
+
 while [ "$#" -gt 0 ]; do
 case "$1" in
     where)
-        local condition="$2"
-        shift 2
-        if [[ "$condition" == *"="* ]]; then
-            local field="${condition%%=*}"
-            local value="${condition#*=}"
-            jq_filter+="select(.${field}==\"${value}\")"
-        elif [[ "$condition" == *"~"* ]]; then
-            local field="${condition%%~*}"
-            local regex="${condition#*~}"
-            jq_filter+="select(.${field} | test(\"${regex}\"))"
-        fi
+        shift
+        ;;
+    and|or)
+        operator="$1"
+        shift
         ;;
     get)
         get_field="$2"
         shift 2
         ;;
     *)
+        local condition="$1"
         shift
+        local cond_expr=""
+        if [[ "$condition" == *"="* ]]; then
+            local field="${condition%%=*}"
+            local value="${condition#*=}"
+            cond_expr=".${field}==\"${value}\""
+        elif [[ "$condition" == *"~"* ]]; then
+            local field="${condition%%~*}"
+            local regex="${condition#*~}"
+            IFS='~' read -r -a regex_parts <<< "$regex"
+            local regex_cond=""
+            for r in "${regex_parts[@]}"; do
+            [[ -n "$regex_cond" ]] && regex_cond+=" and "
+            regex_cond=".${field} | test(\"$r\")"
+            done
+            cond_expr="$regex_cond"
+        else
+        echo "Invalid condition: $condition"
+        return 1
+        fi
+        
+        if [[ -n "$operator" ]]; then
+            jq_expr="($jq_expr) $operator ($cond_expr)"
+            operator=""
+        else
+            jq_expr="$cond_expr"
+        fi
         ;;
 esac
 done
 if [ -z "$get_field" ]; then echo "No target field specified with get"; return 1; fi
-jq -r ".[] | $jq_filter | .${get_field}"
+jq -r ".[] | select($jq_expr) | .${get_field}"
 }
+
 
 
 
