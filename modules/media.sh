@@ -423,7 +423,13 @@ echo "Usage example: yt-downloadthumbnail https://www.youtube.com/watch?v=vJabNE
 return 1
 fi
 ytid=$(echo $link | regex_youtube_id)
-thumbnail="https://i.ytimg.com/vi/$ytid/maxresdefault.jpg"
-wget -q "$thumbnail"
-mv ./maxresdefault.jpg $ytid.jpg
+for quality in "maxresdefault" "hq720" "sddefault"; do
+thumbnail="https://i.ytimg.com/vi/$ytid/${quality}.jpg"
+if wget -q --spider "$thumbnail"; then
+  wget -q "$thumbnail" -O "$ytid.jpg"
+  return
+fi
+done
 }
+
+
