@@ -2,7 +2,7 @@
 
 # Media module
 MODULE_NAME="media"
-MODULE_VERSION="1.07"
+MODULE_VERSION="1.06"
 MODULE_DESCRIPTION="Audio/video/image processing functions"
 
 
@@ -391,6 +391,7 @@ fi
 }
 
 
+
 # ------------ AUDIO PROCESSES ----------------
 
 function is_audio_playing() {
@@ -431,5 +432,4 @@ if wget -q --spider "$thumbnail"; then
 fi
 done
 }
-
 

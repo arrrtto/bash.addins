@@ -262,6 +262,16 @@ sed -n "/${start_word}/,/^${end_word}/!d" | sed "/^${end_word}/q"
 }
 
 
+function sed_keeplines_after() {
+# Keeps only lines with something after a certain character, for example ⟩ followed by a space.
+if [ "$#" -ne 1 ]; then
+echo "Keeps only lines with something after a certain character, for example ⟩ followed by a space."
+echo "Usage example: sed_keeplines_after '⟩ '"
+return 1
+fi
+grep -E ".+$1[^[:space:]].+"
+}
+
 
 function sed_keepline() {
 # Keeps only the certain row/line from the input text.
@@ -269,7 +279,6 @@ if [ "$#" -ne 1 ]; then echo "Usage example: sed_keepline 2"; return 1; fi
 local rownumber="$1"
 sed -n "${rownumber}p"
 }
-
 
 function sed_keeplinesrange() {
 # Keep a range of lines
@@ -401,6 +410,27 @@ local start=${1?Need the starting word and ending word}
 local start="$1"
 local end="$2"
 awk "{match(\$0, /$start .*?$end/, m); if (m[0]) print m[0]}"
+}
+
+
+function regex_awk_removeprefixes() {
+# Removes lines that are prefixes of longer lines
+awk '
+    {
+      lines[NR]=$0
+    }
+    END {
+      for(i=1;i<=NR;i++) {
+        keep=1
+        for(j=1;j<=NR;j++) {
+          if(i!=j && index(lines[j], lines[i])==1 && length(lines[j])>length(lines[i])) {
+            keep=0
+            break
+          }
+        }
+        if(keep) print lines[i]
+      }
+    }'
 }
 
 

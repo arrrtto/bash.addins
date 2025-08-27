@@ -2,7 +2,7 @@
 
 # RSS module
 MODULE_NAME="rss"
-MODULE_VERSION="1.00"
+MODULE_VERSION="1.01"
 MODULE_DESCRIPTION="RSS feeds related"
 
 
@@ -26,4 +26,11 @@ local user_repo=$1
 local branch=${2:-main}
 curl -s "https://github.com/$user_repo/commits/$branch.atom" | grep -E "<title>|<updated>" | sed -E 's:.*<(title|updated)>(.*)</\1>.*:\2:'
 }
+
+
+function rss_titles() {
+# Example: rss_titles https://trends.google.com/trending/rss
+curl -s "$1" | grep -E "<title>|<updated>" | sed -E 's:.*<(title|updated)>(.*)</\1>.*:\2:'
+}
+
 

@@ -214,6 +214,81 @@ find . -type f -size "$1" -exec du -h {} + 2>/dev/null | sort -hr
 }
 
 
+function list() {
+# Meant for listing the contents of a text file, where is supposed to be a list of files, and then processing those files in a certain manner.
+local input_file="$1"
+local action="$2"
+shift 2
+
+# Usage info
+if [[ -z "$input_file" || -z "$action" ]]; then
+echo "Usage: list <file-with-paths> <action> [extra-args...]"
+echo
+echo "Actions:"
+echo "  echo             Print each file path"
+echo "  delete           Delete files"
+echo "  size             Show file sizes (du -h)"
+echo "  basename         Show only the filename"
+echo "  dirname          Show only the directory"
+echo "  exists           Check if file exists"
+echo "  copy <dir>       Copy files into directory"
+echo "  move <dir>       Move files into directory"
+echo "  chmod <mode>     Change permissions (e.g. 644)"
+echo "  exec <command>   Run command on each file (e.g. 'file', 'md5sum')"
+echo
+echo "Examples:"
+echo "  list fileslist.txt echo"
+echo "  list fileslist.txt delete"
+echo "  list fileslist.txt copy /tmp/backup"
+echo "  list fileslist.txt exec md5sum"
+return 1
+fi
+
+if [[ ! -f "$input_file" ]]; then echo "Error: file '$input_file' not found."; return 1; fi
+
+while IFS= read -r file; do
+    case "$action" in
+            echo)
+                echo "$file"
+                ;;
+            delete)
+                rm -v -- "$file"
+                ;;
+            size)
+                du -h -- "$file"
+                ;;
+            basename)
+                basename -- "$file"
+                ;;
+            dirname)
+                dirname -- "$file"
+                ;;
+            exists)
+                [[ -e "$file" ]] && echo "Exists: $file" || echo "Missing: $file"
+                ;;
+            copy)
+                cp -v -- "$file" "$1"
+                ;;
+            move)
+                mv -v -- "$file" "$1"
+                ;;
+            chmod)
+                chmod "$1" -- "$file"
+                ;;
+            exec)
+                "$@" "$file"
+                ;;
+            *)
+                echo "Unsupported action: $action"
+                echo "For usage help, just type: list"
+                return 1
+                ;;
+    esac
+done < "$input_file"
+}
+
+
+
 function replace_extension() {
 # Replaces the file extension of all files with a specified old extension to a new extension.
 # Example: replace_extension jpg.txt txt   ; that renames "jpg.txt" extension to "txt"
@@ -242,6 +317,19 @@ find "$folder/" -maxdepth 1 -type f -iname "*" | while IFS= read -r file; do
 if [[ "$file" =~ \  ]]; then new_name="${file// /_}"; mv "$file" "$new_name"; fi
 done
 }
+
+
+function replace_nordic_chars() {
+# Replaces Nordic characters like õüäö to ouao in filenames in a specified folder.
+# Example: replace_nordic_chars ~/Downloads
+local folder=${1?No input given for the folder} # Check if the folder is empty
+if [ -z "$folder" ]; then return 0; fi  # Do nothing if no folder is provided
+folder="${folder%/}" # Normalize folder path by removing trailing slash if present. No need, but for perfection sake
+find "$folder/" -maxdepth 1 -type f -iname "*" | while IFS= read -r file; do
+mv "$file" "$(echo "$file" | sed 's/ä/a/g; s/ü/u/g; s/õ/o/g; s/ö/o/g')"
+done
+}
+
 
 
 function wait4download() {
