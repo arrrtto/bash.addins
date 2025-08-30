@@ -2,7 +2,7 @@
 
 # Media module
 MODULE_NAME="media"
-MODULE_VERSION="1.06"
+MODULE_VERSION="1.07"
 MODULE_DESCRIPTION="Audio/video/image processing functions"
 
 
@@ -97,6 +97,39 @@ for file in "$@"; do
 done
 echo "All conversions complete!"
 }
+
+
+function audio_removemetadata() {
+# Removes all metadata (including album art) from one or more audio files using ffmpeg.
+# Overwrites the original file(s) with a clean copy.
+# Example: audio_removemetadata song.mp3 track.wav *.flac
+if [[ $# -eq 0 ]]; then
+echo "Usage example: audio_removemetadata *.mp3"
+echo "Usage example: audio_removemetadata track1.mp3 track2.mp3 *.flac *.wav"
+return 1
+fi
+
+local infile tmpfile ext
+for infile in "$@"; do
+if [[ ! -f "$infile" ]]; then echo "Skipping: File not found: $infile"; continue; fi
+
+ext="${infile##*.}"   # preserve extension
+tmpfile="$(mktemp --tmpdir="$(dirname "$infile")" clearmetadata.XXXXXX).$ext" || {
+echo "Error: Could not create temp file for $infile"
+continue
+}
+
+# Run ffmpeg to strip metadata
+if ffmpeg -i "$infile" -map_metadata -1 -c copy "$tmpfile" -y -loglevel error; then
+mv -f "$tmpfile" "$infile"
+echo "Metadata cleared from: $infile"
+else
+echo "Error: Failed to process $infile"
+rm -f "$tmpfile"
+fi
+done
+}
+
 
 
 
@@ -410,6 +443,7 @@ fi
 sleep 1 && clear
 done
 }
+
 
 
 
