@@ -128,6 +128,7 @@ echo "Error: Failed to process $infile"
 rm -f "$tmpfile"
 fi
 done
+rm clearmetadata.*
 }
 
 
