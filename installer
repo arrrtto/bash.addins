@@ -3,7 +3,7 @@
 # BASH Addins - the library of custom functions and aliases for enhanced BASH scripting and Terminal usage.
 # Started by Artto Aunap (https://github.com/arrrtto) in 2025 for personal use, but in 2025 decided to share with the GNU/Linux and FOSS community.
 
-BA_VERSION="1.08"
+BA_VERSION="1.09"
 BA_DESCRIPTION="Enhanced BASH scripting library"
 BA_AUTHOR="Artto Aunap"
 BA_LICENSE="MIT"
@@ -118,6 +118,15 @@ gradient_text "Setup complete! BASH Add-ins now in use. Enjoy!"
 }
 
 
+function ba_update() {
+download_modules
+ba_compile
+ba_tobin
+gradient_text "Update complete! Enjoy!"
+reload
+}
+
+
 function show_help() {
 clear
 echo BASH Addins installer, version ${BA_VERSION}
@@ -126,8 +135,9 @@ printf "Usage:\n\n"
 printf "\e[32m./%s help\e[0m      Shows this help message\n" "${BA_INSTALLERFILE}"
 printf "\e[32m./%s version\e[0m   Shows current version\n" "${BA_INSTALLERFILE}"
 printf "\e[32m./%s check\e[0m     Checks GitHub for a newer version\n" "${BA_INSTALLERFILE}"
-printf "\e[32m./%s setup\e[0m     Installs software dependencies, creates the final bash.addins file, which includes all the functions from the modules combined, copies it to ~/bin folder\n" "${BA_INSTALLERFILE}"
-printf "\e[32m./%s compile\e[0m   Just creates the final bash.addins file into the current folder and copies it to ~/bin\n" "${BA_INSTALLERFILE}"
+printf "\e[32m./%s setup\e[0m     Installs software dependencies, creates the final bash.addins file, which includes all the functions from the modules combined, moves it to ~/bin folder\n" "${BA_INSTALLERFILE}"
+printf "\e[32m./%s update\e[0m    Downloads the latest module files from GitHub and compiles the bash.addins file and moves it to ~/bin\n" "${BA_INSTALLERFILE}"
+printf "\e[32m./%s compile\e[0m   Just compiles local module files into final bash.addins file and moves it to ~/bin\n" "${BA_INSTALLERFILE}"
 printf "\n\n"
 }
 
@@ -137,7 +147,9 @@ if [[ "$1" == "help" ]] || [[ "$1" == "" ]]; then show_help; fi
 if [[ "$1" == "version" ]]; then echo "BASH Addins version $BA_VERSION" && sleep 1; fi
 if [[ "$1" == "check" ]]; then ba_versioncheck; fi
 if [[ "$1" == "setup" ]]; then ba_setup; fi
-if [[ "$1" == "compile" ]]; then download_modules; ba_compile; ba_tobin; add_to_bashrc; fi
+if [[ "$1" == "update" ]]; then ba_update; fi
+if [[ "$1" == "compile" ]]; then ba_compile; ba_tobin; fi
+
 
 
 
