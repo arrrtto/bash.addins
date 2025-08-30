@@ -122,8 +122,8 @@ function ba_update() {
 download_modules
 ba_compile
 ba_tobin
+source bash.addins
 gradient_text "Update complete! Enjoy!"
-reload
 }
 
 
