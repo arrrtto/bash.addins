@@ -15,8 +15,8 @@ if [[ -z "$channel_id" ]]; then
    return 1
 fi
 xml=$(curl -s "https://www.youtube.com/feeds/videos.xml?channel_id=${channel_id}" | grep -E "<title>|<published>")
-local title=$(echo "$xml" | sed_keep_between_xml "title" | tail -n 1)
-local pubdate=$(echo "$xml" | sed_keep_between_xml "published" | tail -n 1 | regex_date)
+local title=$(echo "$xml" | sed_keep_between_xml "title" | sed_keepline 2)
+local pubdate=$(echo "$xml" | sed_keep_between_xml "published" | sed_keepline 2 | regex_date)
 gradient_text "$pubdate: $title"
 }
 
