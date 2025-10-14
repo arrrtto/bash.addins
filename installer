@@ -100,8 +100,13 @@ if [[ ! -d ./modules ]]; then  # If modules folder does not exist, create it and
 echo "Downloading modules..."
 mkdir modules
 cd modules
+mkdir temp
+cd temp
 modulefileslist=$(curl -s "https://github.com/arrrtto/bash.addins/tree/main/modules" | grep -oP '\w+\.sh' | awk '!seen[$0]++')
 for modulefile in $modulefileslist; do wget -q https://raw.githubusercontent.com/arrrtto/bash.addins/main/modules/$modulefile; done
+mv *.sh ../
+cd ..
+rm temp
 cd ..
 fi
 }
