@@ -627,3 +627,33 @@ END {
 
 
 
+function prefix_suffix_to_lines() {
+# Function for adding some text or characters in front of and to the end of text/lines found in the input file.
+# Usage: prefix_suffix_to_lines <input-file> <prefix> [suffix]" >&2
+# Usage example: prefix_suffix_to_lines input.txt 'https://www.some.com/' '"'
+# That adds https://www.some.com/ to the front of every line (prefix) and quotation mark after (suffix).
+# Note that the suffix is optional.
+if [ "$#" -lt 2 ]; then
+echo "Function for adding some text or characters in front of and to the end of text/lines found in the input file."
+echo "Usage: prefix_suffix_to_lines <input-file> <prefix> [suffix]" >&2
+echo "Usage example: prefix_suffix_to_lines input.txt 'https://www.some.com/' '\"' "
+echo "That adds https://www.some.com/ to the front of every line (prefix) and quotation mark after (suffix)."
+echo "Note that the suffix is optional."
+return 1
+fi
+
+local inputfile="$1"
+local prefix="$2"
+local suffix="$3"
+
+while IFS= read -r line; do  # Keep empty lines unchanged
+if [[ -z "$line" ]]; then
+  printf '%s\n' ""
+else
+  printf '%s\n' "${prefix}${line}${suffix}"
+fi
+done < "$inputfile"
+}
+
+
+

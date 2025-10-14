@@ -103,6 +103,61 @@ esac
 }
 
 
+
+function whatdate() {
+    # Check minimum args
+    if [ $# -lt 3 ]; then
+        echo "Usage: whatdate <number> <unit> [<number> <unit> ...] <ago|ahead>"
+        echo "Example: whatdate 2 months 3 days ago"
+        echo "Example: whatdate 1 week ahead"
+        return 1
+    fi
+
+    # Get direction (last argument)
+    direction=${@: -1}
+
+    # Determine direction symbol
+    case "$direction" in
+        ago) op="-" ;;
+        ahead) op="+" ;;
+        *) echo "Invalid direction. Use 'ago' or 'ahead'."; return 1 ;;
+    esac
+
+    # Build the time expression (everything except the last argument)
+    args=("${@:1:$#-1}")
+
+    # Normalize units and rebuild time expression
+    time_expr=""
+    for ((i=0; i<${#args[@]}; i+=2)); do
+        num=${args[i]}
+        unit=${args[i+1]}
+        # Normalize plural/singular
+        case "$unit" in
+            hour|hours)   u="hour" ;;
+            day|days)     u="day" ;;
+            week|weeks)   u="week" ;;
+            month|months) u="month" ;;
+            year|years)   u="year" ;;
+            *) echo "Invalid unit '$unit'. Use hours, days, weeks, months, or years."; return 1 ;;
+        esac
+        time_expr+=" $op$num $u"
+    done
+
+    # Calculate date
+    result=$(date -d "$time_expr" +"%d.%m.%Y" 2>/dev/null)
+
+    if [ -z "$result" ]; then
+        echo "Error calculating date."
+        return 1
+    fi
+
+    echo "$result"
+}
+
+
+
+
+
 # ------------ SYSTEM RELATED ------------
 
 function systeminfo() {

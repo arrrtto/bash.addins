@@ -468,3 +468,44 @@ fi
 done
 }
 
+
+function wget_batch() {
+    local baseurl="$1"
+    shift
+
+    if [[ -z "$baseurl" ]]; then
+        echo "Function to download a batch of files with wget."
+        echo "Usage:"
+        echo "  wget_batch <base_url> <filelist.txt>"
+        echo "  wget_batch <base_url> file1 file2 file3 ..."
+        echo "Usage example: wget_batch https://ilm.ee/client/failid/ filelist.txt"
+        echo "Usage example: wget_batch https://ilm.ee/client/failid/ galerii322002.jpg galerii322003.jpg galerii322008.jpg"
+        echo "NB: If you use a filelist file, just have only the filenames on each row, one below another."
+        return 1
+    fi
+
+    local files=()
+
+    if [[ $# -eq 1 && -f "$1" ]]; then
+        # Read from file
+        while IFS= read -r filename; do
+            [[ -n "$filename" ]] && files+=("$filename")
+        done < "$1"
+    else
+        # Remaining args are filenames
+        files=("$@")
+    fi
+
+    for filename in "${files[@]}"; do
+        local url="${baseurl%/}/$filename"
+        if wget -q --spider "$url"; then
+            wget -q "$url" -O "$filename"
+            echo "✔ Saved $filename"
+        else
+            echo "✘ File not found: $url"
+        fi
+    done
+}
+
+
+
