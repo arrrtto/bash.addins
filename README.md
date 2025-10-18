@@ -74,6 +74,10 @@ Here is a demonstrational video: https://odysee.com/@A-Computer-Service:e/bash.a
 4. Push to the branch
 5. Open a Pull Request
 
+## Discussions
+
+If you want to ask about something, you can contact me (Artto) via e-mail artto@tuta.com or via Telegram Messenger @divineloveartto
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details. Overall it is free software, as defined by Free Software Foundation - free to modify, to benefit humanity.
