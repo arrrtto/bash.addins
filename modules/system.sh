@@ -2,7 +2,7 @@
 
 # General system module
 MODULE_NAME="system"
-MODULE_VERSION="1.06"
+MODULE_VERSION="1.07"
 MODULE_DESCRIPTION="System utilities, files and process management"
 
 
@@ -386,6 +386,10 @@ done
 }
 
 
+#####################################
+# WAIT4 UTILITIES — standardized set
+# All follow the same style and argument checks
+#####################################
 
 function wait4download() {
 # Waits for a download to complete by checking for .crdownload files in the Downloads folder.
@@ -405,6 +409,236 @@ else
  echo "No .crdownload files found, so possibly nothing is downloading to Downloads folder at the moment."
 fi
 }
+
+
+function wait4process_start() {
+# Waits for a specific process to start running.
+# Example: wait4process_start firefox
+local process="$1"
+if [ -z "$process" ]; then
+  echo "Usage: wait4process_start process_name"
+  return 1
+fi
+echo "Waiting for process '$process' to start..."
+while ! pgrep -x "$process" >/dev/null; do sleep 2; done
+echo "Process '$process' started!"
+}
+
+
+function wait4process_stop() {
+# Waits for a specific process to stop running.
+# Example: wait4process_stop firefox
+local process="$1"
+if [ -z "$process" ]; then
+  echo "Usage: wait4process_stop process_name"
+  return 1
+fi
+echo "Waiting for process '$process' to stop..."
+while pgrep -x "$process" >/dev/null; do sleep 2; done
+echo "Process '$process' stopped."
+}
+
+
+function wait4window() {
+# Waits until a window with the given title appears.
+# Example: wait4window "Telegram"
+local title="$1"
+if [ -z "$title" ]; then
+  echo "Usage: wait4window \"Window Title\""
+  return 1
+fi
+echo "Waiting for window titled '$title'..."
+while ! xdotool search --name "$title" >/dev/null 2>&1; do sleep 2; done
+echo "Window '$title' found."
+}
+
+
+function wait4window_close() {
+# Waits until a window with the given title closes.
+# Example: wait4window_close "Telegram"
+local title="$1"
+if [ -z "$title" ]; then
+  echo "Usage: wait4window_close \"Window Title\""
+  return 1
+fi
+if ! xdotool search --name "$title" >/dev/null 2>&1; then
+  echo "Window '$title' not found — already closed?"
+  return 0
+fi
+echo "Waiting for window titled '$title' to close..."
+while xdotool search --name "$title" >/dev/null 2>&1; do sleep 2; done
+echo "Window '$title' closed."
+}
+
+
+function wait4file() {
+# Waits for a file to appear in the filesystem.
+# Example: wait4file /home/user/Downloads/file.txt
+local filepath="$1"
+if [ -z "$filepath" ]; then
+  echo "Usage: wait4file /path/to/file"
+  return 1
+fi
+echo "Waiting for file '$filepath'..."
+while [ ! -f "$filepath" ]; do sleep 2; done
+echo "File '$filepath' found!"
+}
+
+
+function wait4file_gone() {
+# Waits until a file disappears (deleted or moved).
+# Example: wait4file_gone /home/user/Downloads/file.txt
+local filepath="$1"
+if [ -z "$filepath" ]; then
+  echo "Usage: wait4file_gone /path/to/file"
+  return 1
+fi
+if [ ! -e "$filepath" ]; then
+  echo "File '$filepath' already gone."
+  return 0
+fi
+echo "Waiting for file '$filepath' to disappear..."
+while [ -e "$filepath" ]; do sleep 2; done
+echo "File '$filepath' is gone."
+}
+
+
+function wait4file_ready() {
+# Waits until a file stops changing in size AND is no longer opened by any process.
+# Example: wait4file_ready /home/$USER/Videos/render.mp4
+local filepath="$1"
+local stable_checks=3  # how many consecutive unchanged size checks to confirm readiness
+
+if [ -z "$filepath" ]; then
+  echo "Usage: wait4file_ready /path/to/file"
+  return 1
+fi
+
+if [ ! -f "$filepath" ]; then
+  echo "File '$filepath' not found."
+  return 1
+fi
+
+echo "Waiting for file '$filepath' to finish writing..."
+local last_size=0
+local unchanged=0
+
+# --- Phase 1: Wait until file size is stable ---
+while true; do
+  local size=$(stat -c%s "$filepath" 2>/dev/null)
+  if [ "$size" -eq "$last_size" ]; then
+    ((unchanged++))
+  else
+    unchanged=0
+  fi
+
+  if [ "$unchanged" -ge "$stable_checks" ]; then
+    echo "File size has stabilized (unchanged for $stable_checks checks)."
+    break
+  fi
+
+  last_size=$size
+  sleep 2
+done
+
+# --- Phase 2: Wait until file is released by all processes ---
+echo "Checking if any processes are still using '$filepath'..."
+while lsof "$filepath" >/dev/null 2>&1; do
+  echo "File is still open by some process... waiting..."
+  sleep 2
+done
+
+echo "File '$filepath' is ready."
+}
+
+
+function wait4network() {
+# Waits until there is an active internet connection.
+# Example: wait4network
+echo "Waiting for internet connection..."
+until ping -c1 8.8.8.8 &>/dev/null; do sleep 3; done
+echo "Internet connection is active."
+}
+
+
+function wait4updates_apt() {
+# Waits until APT or dpkg is not locked by another process.
+# Example: wait4updates_apt
+echo "Waiting for apt/dpkg lock to be released..."
+while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1 || \
+      sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do
+  sleep 3
+done
+echo "APT is ready."
+}
+
+
+function wait4mount() {
+# Waits until a given mount point is mounted.
+# Example: wait4mount /media/usb
+local mountpoint="$1"
+if [ -z "$mountpoint" ]; then
+  echo "Usage: wait4mount /mount/point"
+  return 1
+fi
+echo "Waiting for mount point '$mountpoint'..."
+while ! mount | grep -q "$mountpoint"; do sleep 2; done
+echo "'$mountpoint' mounted."
+}
+
+
+function wait4unmount() {
+# Waits until a given mount point is unmounted.
+# Example: wait4unmount /media/usb
+local mountpoint="$1"
+if [ -z "$mountpoint" ]; then
+  echo "Usage: wait4unmount /mount/point"
+  return 1
+fi
+echo "Waiting for '$mountpoint' to unmount..."
+while mount | grep -q "$mountpoint"; do sleep 2; done
+echo "'$mountpoint' unmounted."
+}
+
+
+function wait4cpu_idle() {
+# Waits until CPU usage drops below a given threshold (default 20%).
+# Example: wait4cpu_idle 15
+local threshold=${1:-20}
+echo "Waiting for CPU usage to drop below ${threshold}%..."
+while true; do
+  local usage=$(awk -v t=$threshold '/^%Cpu/ {print 100 - $8}' <(top -bn1))
+  if (( ${usage%.*} < threshold )); then break; fi
+  sleep 5
+done
+echo "CPU is idle (below ${threshold}%)."
+}
+
+
+function wait4app_idle() {
+# Waits until a specific process has near-zero CPU usage.
+# Example: wait4app_idle kdenlive 5
+local process="$1"
+local threshold=${2:-5}  # CPU threshold in percent
+if [ -z "$process" ]; then
+  echo "Usage: wait4app_idle process_name [CPU threshold number in percentage]"
+  return 1
+fi
+
+echo "Waiting for '$process' to become idle (below ${threshold}% CPU)..."
+while true; do
+  local pid=$(pgrep -x "$process" | head -n1)
+  [ -z "$pid" ] && { echo "Process '$process' not running."; return 1; }
+
+  local cpu=$(ps -p "$pid" -o %cpu= | awk '{print int($1)}')
+  if (( cpu < threshold )); then
+    echo "'$process' is idle."
+    break
+  fi
+  sleep 2
+done
+}
+
 
 
 function press() {
