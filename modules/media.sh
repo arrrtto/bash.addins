@@ -549,21 +549,72 @@ function record_screen() {
 }
 
 
+function record_audio_output() {
+# Function to record Desktop Audio only (output) into flac (or wav) file
+  local monitor=$(get_default_monitor)
+  local outfile="$HOME/Videos/audio_output_$(date +%F_%H-%M-%S).flac"
+
+  # fallback to wav if FLAC fails
+  if ! ffmpeg -f pulse -i "$monitor" -t 1 -f flac /dev/null &>/dev/null; then
+    local format="wav"
+    outfile="${outfile%.flac}.wav"
+  else
+    local format="flac"
+  fi
+
+  echo "🎧 Recording Desktop Audio ($monitor) → $outfile"
+  nohup ffmpeg -f pulse -i "$monitor" -acodec "$format" "$outfile" >/dev/null 2>&1 &
+  echo $! > /tmp/record_audio.pid
+  echo "Recording started."
+}
+
+function record_audio_input() {
+# Function to record only the default microphone (input) into flac (or wav) file
+  local mic=$(get_default_mic)
+  local outfile="$HOME/Videos/audio_input_$(date +%F_%H-%M-%S).flac"
+
+  # fallback to wav if FLAC fails
+  if ! ffmpeg -f pulse -i "$mic" -t 1 -f flac /dev/null &>/dev/null; then
+    local format="wav"
+    outfile="${outfile%.flac}.wav"
+  else
+    local format="flac"
+  fi
+
+  echo "🎤 Recording Microphone ($mic) → $outfile"
+  nohup ffmpeg -f pulse -i "$mic" -acodec "$format" "$outfile" >/dev/null 2>&1 &
+  echo $! > /tmp/record_audio.pid
+  echo "Recording started."
+}
+
 function record_stop() {
+# Function to stop screen recording and/or audio recording
   if [[ -f /tmp/record_screen.pid ]]; then
     PID=$(cat /tmp/record_screen.pid)
     if kill "$PID" 2>/dev/null; then
-      echo "🛑 Recording stopped."
+      echo "🛑 Screen recording stopped."
       rm -f /tmp/record_screen.pid
     else
-      echo "Could not stop recording (PID not found)."
+      echo "Could not stop screen recording (PID not found)."
     fi
   else
-    echo "No active recording found."
+    echo "No active screen recording found."
+  fi
+
+  if [[ -f /tmp/record_audio.pid ]]; then
+    PID=$(cat /tmp/record_audio.pid)
+    if kill "$PID" 2>/dev/null; then
+      echo "🛑 Audio recording stopped."
+      rm -f /tmp/record_audio.pid
+    else
+      echo "Could not stop audio recording (PID not found)."
+    fi
+  else
+    echo "No active audio recording found."
   fi
 }
 
-###########################################
-#  END OF FFmpeg Screen Recorder section
-###########################################
 
+###########################################
+#  END OF FFmpeg section
+###########################################
