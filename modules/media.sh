@@ -551,19 +551,11 @@ function record_screen() {
 
 function record_audio_output() {
 # Function to record Desktop Audio only (output) into flac (or wav) file
-  local monitor=$(get_default_monitor)
-  local outfile="$HOME/Videos/audio_output_$(date +%F_%H-%M-%S).flac"
-
-  # fallback to wav if FLAC fails
-  if ! ffmpeg -f pulse -i "$monitor" -t 1 -f flac /dev/null &>/dev/null; then
-    local format="wav"
-    outfile="${outfile%.flac}.wav"
-  else
-    local format="flac"
-  fi
+  local monitor=$(get_default_audio_output_monitor)
+  local outfile="$HOME/Videos/audio_output_$(date +%F_%H-%M-%S).wav"
 
   echo "🎧 Recording Desktop Audio ($monitor) → $outfile"
-  nohup ffmpeg -f pulse -i "$monitor" -acodec "$format" "$outfile" >/dev/null 2>&1 &
+  nohup ffmpeg -f pulse -i "$monitor" -acodec pcm_s16le "$outfile" >/dev/null 2>&1 &
   echo $! > /tmp/record_audio.pid
   echo "Recording started."
 }
@@ -571,18 +563,10 @@ function record_audio_output() {
 function record_audio_input() {
 # Function to record only the default microphone (input) into flac (or wav) file
   local mic=$(get_default_mic)
-  local outfile="$HOME/Videos/audio_input_$(date +%F_%H-%M-%S).flac"
-
-  # fallback to wav if FLAC fails
-  if ! ffmpeg -f pulse -i "$mic" -t 1 -f flac /dev/null &>/dev/null; then
-    local format="wav"
-    outfile="${outfile%.flac}.wav"
-  else
-    local format="flac"
-  fi
+ local outfile="$HOME/Videos/audio_input_$(date +%F_%H-%M-%S).wav"
 
   echo "🎤 Recording Microphone ($mic) → $outfile"
-  nohup ffmpeg -f pulse -i "$mic" -acodec "$format" "$outfile" >/dev/null 2>&1 &
+  nohup ffmpeg -f pulse -i "$mic" -acodec pcm_s16le "$outfile" >/dev/null 2>&1 &
   echo $! > /tmp/record_audio.pid
   echo "Recording started."
 }
