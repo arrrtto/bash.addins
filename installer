@@ -3,7 +3,7 @@
 # BASH Addins - the library of custom functions and aliases for enhanced BASH scripting and Terminal usage.
 # Started by Artto Aunap (https://github.com/arrrtto) in 2025 for personal use, but in 2025 decided to share with the GNU/Linux and FOSS community.
 
-BA_VERSION="1.09"
+BA_VERSION="1.11"
 BA_DESCRIPTION="Enhanced BASH scripting library"
 BA_AUTHOR="Artto Aunap"
 BA_LICENSE="MIT"
@@ -24,15 +24,72 @@ fi
 
 
 function install_dependencies() {
-# Function to install all the software dependencies (should get installed well on Debian based systems)
-if grep -q -i "debian" /etc/os-release || grep -q -i "ubuntu" /etc/os-release; then  # If Debian based, use apt to install the packages
-clear
-echo "Installing the needed software that BASH Addins depends upon for best possible use..."
-sudo apt install -y qrencode ffmpeg wget sane-utils imagemagick ghostscript xdotool curl csvkit imagemagick wmctrl xclip x11-apps tesseract-ocr scrot gnome-screenshot jq python3-full python3-xlsxwriter python3-openpyxl python3-odf python3-pdfkit csvkit html2text docx2txt xlsx2csv mupdf unoconv libreoffice libreoffice-script-provider-python sox pdftk
-else
-echo "This is not a Debian-based distribution."
-fi
+# Function to install all the software dependencies (works best on Debian/Ubuntu-based systems)
+  if grep -qiE "debian|ubuntu" /etc/os-release; then
+    clear
+    echo "🔧 Installing the needed software that BASH Addins depends upon for best possible use..."
+    echo
+
+    local packages=(
+      qrencode ffmpeg wget sane-utils imagemagick ghostscript xdotool curl csvkit
+      wmctrl xclip x11-apps tesseract-ocr scrot gnome-screenshot jq python3-full
+      python3-xlsxwriter python3-openpyxl python3-odf python3-pdfkit html2text
+      docx2txt xlsx2csv mupdf unoconv libreoffice libreoffice-script-provider-python
+      sox pdftk
+    )
+
+    local failed=()
+    local skipped=()
+
+    echo "Updating package lists..."
+    sudo apt update -qq
+    echo
+
+    for pkg in "${packages[@]}"; do
+      # Check if already installed
+      if dpkg -s "$pkg" &>/dev/null; then
+        echo "✅ $pkg is already installed — skipping."
+        skipped+=("$pkg")
+        continue
+      fi
+
+      # Try to install
+      echo -n "📦 Installing $pkg... "
+      if sudo apt install -y -qq "$pkg" >/dev/null 2>&1; then
+        echo "✅"
+      else
+        echo "❌ (failed)"
+        failed+=("$pkg")
+      fi
+    done
+
+    echo
+    echo "─────────────────────────────────────────────"
+    if [[ ${#failed[@]} -gt 0 ]]; then
+      echo "⚠️  The following packages could not be installed:"
+      for pkg in "${failed[@]}"; do
+        echo "   - $pkg"
+      done
+      echo
+      echo "You may need to enable extra repositories or install these manually."
+    else
+      echo "All software packages installed successfully!"
+    fi
+
+    echo
+    if [[ ${#skipped[@]} -gt 0 ]]; then
+      echo "ℹ️  Skipped already installed packages:"
+      for pkg in "${skipped[@]}"; do
+        echo "   - $pkg"
+      done
+    fi
+    echo "─────────────────────────────────────────────"
+
+  else
+    echo "❌ This is not a Debian-based distribution. Skipping automatic installation."
+  fi
 }
+
 
 
 function append_module() {
