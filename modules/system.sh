@@ -640,6 +640,29 @@ done
 }
 
 
+function wait4time() {
+# Waits until the system clock reaches the given time (HH:MM)
+# Example: wait4time 16:00
+    local target_time="$1"
+    if [[ ! "$target_time" =~ ^[0-9]{2}:[0-9]{2}$ ]]; then
+        echo "Usage: wait4time HH:MM"
+        echo "Example: wait4time 16:00"
+        return 1
+    fi
+
+    echo "Waiting until $target_time..."
+    while true; do
+        local now
+        now=$(date +"%H:%M")
+        if [[ "$now" == "$target_time" ]]; then
+            echo "Reached $target_time!"
+            break
+        fi
+        sleep 1
+    done
+}
+
+
 
 function press() {
 # Function for sending a keyboard stroke with xdotool (to the currently focused window). 

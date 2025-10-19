@@ -508,4 +508,62 @@ function wget_batch() {
 }
 
 
+###########################################
+#  Automatic FFmpeg Screen Recorder
+###########################################
+
+# Detect default screen resolution
+function get_default_resolution() {
+  xrandr | awk '/\*/ {print $1; exit}'
+}
+
+# Detect default microphone (prefer Blue Yeti, but if not found, take whatever is the default)
+function get_default_mic() {
+  local mic
+  mic=$(pactl list short sources | grep -i 'blue\|yeti' | awk '{print $2}' | grep -E "input")
+  [[ -z "$mic" ]] && mic=$(pactl get-default-source)
+  echo "$mic"
+}
+
+# Detect default desktop audio output monitor
+function get_default_audio_output_monitor() {
+  local monitor
+  monitor=$(pactl list short sources | grep ".monitor" | head -n1 | awk '{print $2}')
+  echo "$monitor"
+}
+
+
+function record_screen() {
+# Function to record screen + mic + default audio output into mkv file
+  local reso=$(get_default_resolution)
+  local mic=$(get_default_mic)
+  local monitor=$(get_default_audio_output_monitor)
+  local outfile="$HOME/Videos/record_$(date +%F_%H-%M-%S).mkv"
+
+  echo "Recording screen ($reso)"
+  echo "Mic: $mic"
+  echo "Audio: $monitor"
+
+  nohup ffmpeg -f pulse -i "$monitor" -f pulse -i "$mic" -filter_complex amix=inputs=2:duration=first:dropout_transition=2 -f x11grab -r 30 -s "$reso" -i :0.0 -acodec aac -pix_fmt yuv420p -preset ultrafast -crf 25 -threads 12 "$outfile" >/dev/null 2>&1 &
+  echo $! > /tmp/record_screen.pid
+}
+
+
+function record_stop() {
+  if [[ -f /tmp/record_screen.pid ]]; then
+    PID=$(cat /tmp/record_screen.pid)
+    if kill "$PID" 2>/dev/null; then
+      echo "🛑 Recording stopped."
+      rm -f /tmp/record_screen.pid
+    else
+      echo "Could not stop recording (PID not found)."
+    fi
+  else
+    echo "No active recording found."
+  fi
+}
+
+###########################################
+#  END OF FFmpeg Screen Recorder section
+###########################################
 
