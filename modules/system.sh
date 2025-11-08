@@ -155,6 +155,11 @@ function whatdate() {
 }
 
 
+datetimenow() {
+date +"%d.%m.%Y_%H.%M"
+}
+
+
 
 
 
@@ -382,8 +387,35 @@ if [ -z "$folder" ]; then return 0; fi  # Do nothing if no folder is provided
 folder="${folder%/}" # Normalize folder path by removing trailing slash if present. No need, but for perfection sake
 find "$folder/" -maxdepth 1 -type f -iname "*" | while IFS= read -r file; do
 mv "$file" "$(echo "$file" | sed 's/ä/a/g; s/ü/u/g; s/õ/o/g; s/ö/o/g')"
+mv "$file" "$(echo "$file" | sed 's/Ä/A/g; s/Ü/U/g; s/Õ/O/g; s/Ö/O/g')"
 done
 }
+
+
+function syncit() {
+# Synchronizes files from a source folder to a destination folder using rsync.
+# Copies only newer files, continues on errors, logs the process output results in the source folder, as log file.
+# Example: syncit ~/source ~/backup
+local src=${1?No input given for source folder. Example usage: syncit ~/source ~/backup}   # First argument: source folder
+local dest=${2?No input given for destination folder} # Second argument: destination folder
+if [ -z "$src" ] || [ -z "$dest" ]; then return 0; fi  # Do nothing if missing arguments
+
+src="${src%/}"   # Normalize source path (remove trailing slash if present)
+dest="${dest%/}" # Normalize destination path (remove trailing slash if present)
+local datetime
+datetime=$(date +"%Y-%m-%d_%H.%M") # Format datetime as yyyy-mm-dd_HH.MM
+local logfile="${src}/${datetime}_syncit.log" # Log file stored in source folder
+
+mkdir -p "$dest" # Ensure destination folder exists
+rsync -av --ignore-errors --update --progress --log-file="$logfile" "${src}/" "${dest}/" # Run rsync to synchronize folders
+
+# Output summary
+echo "---------------------------------------"
+echo "Copying complete. Log saved to: $logfile"
+echo "---------------------------------------"
+}
+
+
 
 
 #####################################

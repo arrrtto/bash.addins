@@ -26,5 +26,4 @@ alias uninstall='sudo apt remove'
 alias uninstall_totally='sudo apt purge'
 alias update='sudo apt update && sudo apt upgrade -y'                       # Here we could set up a similar IF function to test if apt is installed or not (e.g. Arch Linux)
 alias week='date +"Current week number: %V"'
-
-
+alias datetime='date +"%Y-%m-%d_%H.%M"'                         # Format datetime as yyyy-mm-dd_HH.MM
