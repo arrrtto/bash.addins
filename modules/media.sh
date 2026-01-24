@@ -602,3 +602,41 @@ function record_stop() {
 ###########################################
 #  END OF FFmpeg section
 ###########################################
+
+
+function ding() {
+# Function to play "ding" sound
+local SOUND="/usr/share/sounds/freedesktop/stereo/complete.oga"
+if command -v paplay >/dev/null 2>&1; then
+   paplay "$SOUND"
+  elif command -v aplay >/dev/null 2>&1; then
+   aplay "$SOUND"
+  else
+   echo "No audio player (paplay/aplay) available" >&2
+   return 1
+fi
+}
+
+function ding_laptop_speakers() {
+# Function to play "ding" sound, but only to the laptop speakers output
+    local SOUND="/usr/share/sounds/freedesktop/stereo/complete.oga"
+    local SINK
+
+    if command -v paplay >/dev/null 2>&1; then
+        SINK="$(pactl list short sinks | awk '/analog-stereo/ {print $2; exit}')"
+
+        if [[ -n "$SINK" ]]; then
+            paplay --device="$SINK" "$SOUND"
+        else
+            paplay "$SOUND"
+        fi
+
+    elif command -v aplay >/dev/null 2>&1; then
+        aplay "$SOUND"
+    else
+        echo "No audio player (paplay/aplay) available" >&2
+        return 1
+    fi
+}
+
+

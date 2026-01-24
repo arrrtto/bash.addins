@@ -2,7 +2,7 @@
 
 # General system module
 MODULE_NAME="system"
-MODULE_VERSION="1.07"
+MODULE_VERSION="1.08"
 MODULE_DESCRIPTION="System utilities, files and process management"
 
 
@@ -85,6 +85,54 @@ function sleeprandom() {
 local random_number=$(( RANDOM % 10 ))
 sleep "$random_number"
 }
+
+
+function is_number() {
+# Function meant to work for diffnum() and numgt, numge, numlt, numle to make sure the number format is good
+# Accepts: 123 | 123.45 | 0.5 | .5 | 5.
+# Rejects: 0,5 | 50 000 | 5.000.000 | abc
+    [[ "$1" =~ ^[0-9]*\.?[0-9]+$ ]] || [[ "$1" =~ ^[0-9]+\.?$ ]]
+}
+
+function diffnum() {
+# Meant for finding the difference between 2 numbers.
+# Example: diffnum 5 3.24
+# Example use case: diff=$(numdiff "$balance" "$last_balance") || continue
+    is_number "$1" || { echo "diffnum: invalid number '$1'" >&2; return 1; }
+    is_number "$2" || { echo "diffnum: invalid number '$2'" >&2; return 1; }
+    awk -v a="$1" -v b="$2" 'BEGIN { printf "%.8f", a - b }'
+}
+
+function numgt() {
+# Function meant for comparing if one number is greater than another in comparison, and if so, then do something.
+# Example: if numgt 2.22 0.1; then echo "greater"; fi
+    is_number "$1" && is_number "$2" || return 1
+    awk -v a="$1" -v b="$2" 'BEGIN { exit !(a > b) }'
+}
+
+function numge() {
+# Function meant for comparing if one number is greater than another, or equal to another in comparison, and if so, then do something.
+# Example: if numge 2.22 0.1; then echo "greater"; fi
+# Example: if numge 5 5; then echo "equal"; fi
+    is_number "$1" && is_number "$2" || return 1
+    awk -v a="$1" -v b="$2" 'BEGIN { exit !(a >= b) }'
+}
+
+function numlt() {
+# Function meant for comparing if one number is less than another in comparison, and if so, then do something.
+# Example: if numlt 0.001 0.1; then echo "less"; fi
+    is_number "$1" && is_number "$2" || return 1
+    awk -v a="$1" -v b="$2" 'BEGIN { exit !(a < b) }'
+}
+
+function numle() {
+# Function meant for comparing if one number is less than another, or equal to another in comparison, and if so, then do something.
+# Example: if numle 0.001 0.1; then echo "less"; fi
+# Example: if numle 0.001 0.001; then echo "equal"; fi
+    is_number "$1" && is_number "$2" || return 1
+    awk -v a="$1" -v b="$2" 'BEGIN { exit !(a <= b) }'
+}
+
 
 
 function whatnext() {
@@ -392,6 +440,102 @@ done
 }
 
 
+
+function choicelist() {
+# Presents a numbered selection menu based on piped input.
+# Usage: selected=$(command producing lines | choicelist)
+# Example: selected=$(ls *.mp3 | choicelist)
+#
+# Multi-select mode:
+#   selected=$(command | choicelist multi)
+#   # User may enter multiple numbers (e.g. "1 3 5" or "1,3")
+#
+# Cancel:
+#   Enter 0, c, C, q, or Q to cancel (function returns exit code 2, no output).
+#
+# Behavior:
+# - Reads incoming lines from stdin (via pipe) into a list.
+# - Displays a numbered menu to the user (via stderr — visible even inside $()).
+# - Prompts for a choice using /dev/tty so user input still works when piped.
+# - In single mode: returns the chosen line to stdout.
+# - In multi mode: returns each selected line on a separate stdout line.
+#
+# Example:
+#   file=$(ls *.mp3 | choicelist)
+#   echo "Selected: $file"
+#
+#   files=$(ls *.mp3 | choicelist multi)
+#   echo "Selected files:"
+#   echo "$files"
+#
+# Exit codes:
+#   0 = Success (output contains selected line(s))
+#   1 = No input received
+#   2 = User cancelled
+#
+# Notes:
+# - Menu goes to stderr so the caller sees it even inside command substitution.
+# - Output (stdout) only contains the final selection(s).
+# - Works correctly with pipelines, scripts, aliases, and subshells.
+
+    local mode="single"
+    [[ "$1" == "multi" ]] && mode="multi"
+    mapfile -t _choices
+    if (( ${#_choices[@]} == 0 )); then return 1; fi
+    
+    # Print menu to stderr
+    for i in "${!_choices[@]}"; do printf "%d) %s\n" $((i+1)) "${_choices[$i]}" >&2; done
+
+    # Prompt text depends on single vs multi mode
+    local prompt="Your choice: "
+    [[ "$mode" == "multi" ]] && prompt="Your choice (multi): "
+
+    local _pick
+
+    while true; do
+        printf "%s" "$prompt" >&2
+        read _pick < /dev/tty
+
+        # Cancel
+        if [[ "$_pick" =~ ^(0|c|C|q|Q)$ ]]; then
+            return 2
+        fi
+
+        if [[ "$mode" == "single" ]]; then
+            # Single selection must be a valid number
+            if [[ "$_pick" =~ ^[0-9]+$ ]] && (( _pick >= 1 && _pick <= ${#_choices[@]} )); then
+                printf "%s" "${_choices[$((_pick-1))]}"
+                return 0
+            fi
+
+        else
+            # Multi mode: allow "1 3 5" or "1,3,5"
+            local ok=true
+            # Normalize commas → spaces
+            local picks=$(printf "%s" "$_pick" | tr ',' ' ')
+
+            for n in $picks; do
+                if ! [[ "$n" =~ ^[0-9]+$ ]] || (( n < 1 || n > ${#_choices[@]} )); then
+                    ok=false
+                fi
+            done
+
+            if $ok; then
+                # Print selected lines, one per line
+                for n in $picks; do
+                    printf "%s\n" "${_choices[$((n-1))]}"
+                done
+                return 0
+            fi
+        fi
+
+        printf "Invalid choice. Enter numbers between 1-%d.\n" "${#_choices[@]}" >&2
+    done
+}
+
+
+
+
 function syncit() {
 # Synchronizes files from a source folder to a destination folder using rsync.
 # Copies only newer files, continues on errors, logs the process output results in the source folder, as log file.
@@ -506,32 +650,70 @@ echo "Window '$title' closed."
 function wait4file() {
 # Waits for a file to appear in the filesystem.
 # Example: wait4file /home/user/Downloads/file.txt
-local filepath="$1"
-if [ -z "$filepath" ]; then
+# Example: wait4file ~/Downloads/*.mp4
+# Example: wait4file ~/Downloads/*vie*
+if [ $# -lt 1 ]; then
   echo "Usage: wait4file /path/to/file"
+  echo "Usage: wait4file /path/to/pattern"
   return 1
 fi
-echo "Waiting for file '$filepath'..."
-while [ ! -f "$filepath" ]; do sleep 2; done
-echo "File '$filepath' found!"
+# If the shell expanded a glob, you'll get multiple args (already-matching files). In that case, we're done immediately.
+if [ $# -gt 1 ]; then
+  echo "File found:"
+  printf '  %s\n' "$@"
+  return 0
+fi
+local pattern="$1"
+echo "Waiting for: $pattern"
+while ! compgen -G "$pattern" > /dev/null; do sleep 2; done    # Loop until the pattern matches at least one file
+echo "File found:"
+compgen -G "$pattern"    # Print all matches (can be multiple)
 }
 
 
-function wait4file_gone() {
-# Waits until a file disappears (deleted or moved).
-# Example: wait4file_gone /home/user/Downloads/file.txt
-local filepath="$1"
-if [ -z "$filepath" ]; then
-  echo "Usage: wait4file_gone /path/to/file"
-  return 1
-fi
-if [ ! -e "$filepath" ]; then
-  echo "File '$filepath' already gone."
-  return 0
-fi
-echo "Waiting for file '$filepath' to disappear..."
-while [ -e "$filepath" ]; do sleep 2; done
-echo "File '$filepath' is gone."
+wait4file_gone() {
+  # Waits until a file OR glob/pattern disappears.
+  # Works with:
+  #   wait4file_gone ~/Downloads/movie.mp4
+  #   wait4file_gone ~/Downloads/*.mp4
+  #   wait4file_gone ~/Downloads/*vie*
+
+  if [ $# -lt 1 ]; then
+    echo "Usage: wait4file_gone /path/or/pattern"
+    return 1
+  fi
+
+  # If the shell expanded the glob, we got multiple existing files.
+  # We'll wait until ALL of them are gone.
+  if [ $# -gt 1 ]; then
+    echo "Waiting for all matched files to disappear:"
+    printf '  %s\n' "$@"
+
+    while :; do
+      still_there=false
+      for f in "$@"; do
+        if [ -e "$f" ]; then
+          still_there=true
+          break
+        fi
+      done
+      $still_there || break
+      sleep 2
+    done
+
+    echo "All matched files are gone."
+    return 0
+  fi
+
+  local pattern="$1"
+  if ! compgen -G "$pattern" > /dev/null; then
+    echo "No files matching '$pattern' (already gone)."   # If nothing matches already, we’re done
+    return 0
+  fi
+
+  echo "Waiting for files matching '$pattern' to disappear..."
+  while compgen -G "$pattern" > /dev/null; do sleep 2; done    # Loop until NOTHING matches the pattern
+  echo "All files matching '$pattern' are gone."
 }
 
 
