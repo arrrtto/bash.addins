@@ -2,10 +2,11 @@
 
 # Aliases module
 MODULE_NAME="aliases"
-MODULE_VERSION="1.04"
+MODULE_VERSION="1.05"
 MODULE_DESCRIPTION="All kinds of aliases for various purposes to simplify life :)"
 
 alias cls='clear'
+alias cleanup='sudo journalctl --rotate && sudo journalctl --vacuum-time=7d && sudo apt clean && sudo apt autoremove'
 alias distro='cat /etc/os-release'
 alias grep='grep --color=auto'
 alias installdeb='sudo dpkg -i'

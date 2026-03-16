@@ -282,6 +282,291 @@ df -h | grep "^/" | grep -Ev "boot" | awk '{print "Free space on", $1":", $4"B"}
 }
 
 
+function battery_ntfy_watch() {
+# Battery low alert -> ntfy
+# Requires: curl, ntfy.sh topic (or your own ntfy server)
+# Works on Linux laptops with /sys/class/power_supply/*
+# Usage examples:
+#   battery_ntfy_watch "mytopic"                # default: threshold 10%, check every 5 seconds
+#   battery_ntfy_watch "mytopic" 15 30          # threshold 15%, check every 30s
+#   battery_ntfy_watch "mytopic" 10 60 "https://ntfy.my.domain"
+  local topic="${1:-}"
+  local threshold="${2:-10}"
+  local interval="${3:-5}"
+  local ntfy_base="${4:-https://ntfy.sh}"
+
+  if [[ -z "$topic" ]]; then
+    echo "Usage: battery_ntfy_watch <ntfy_topic> [threshold_percent=10] [interval_seconds=60] [ntfy_base=https://ntfy.sh]" >&2
+    return 2
+  fi
+
+  command -v curl >/dev/null 2>&1 || { echo "battery_ntfy_watch: curl not found" >&2; return 3; }
+
+  # Find a battery (BAT0/BAT1 etc)
+  local bat
+  bat="$(ls -d /sys/class/power_supply/BAT* 2>/dev/null | head -n1)"
+  if [[ -z "$bat" ]]; then
+    echo "battery_ntfy_watch: No /sys/class/power_supply/BAT* found" >&2
+    return 4
+  fi
+
+  # State to avoid spamming
+  local state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/bash-addins"
+  mkdir -p "$state_dir"
+  local stamp_file="$state_dir/battery_ntfy_last_sent_${topic}.ts"
+
+  # Helper: send ntfy
+  _battery_ntfy_send() {
+    local title="$1"
+    local msg="$2"
+    local prio="${3:-4}" # 1..5 (ntfy priority)
+    curl -fsS \
+      -H "Title: $title" \
+      -H "Priority: $prio" \
+      -H "Tags: battery,warning" \
+      -d "$msg" \
+      "$ntfy_base/$topic" >/dev/null
+  }
+
+  # Helper: safe reads
+  _readf() { [[ -r "$1" ]] && cat "$1" 2>/dev/null || echo ""; }
+
+  # Cooldown: only notify once every N minutes while low
+  local cooldown_seconds=300  # 5 min
+
+  echo "Monitoring battery $bat (threshold <= ${threshold}%, every ${interval}s) -> $ntfy_base/$topic"
+
+  while true; do
+    local cap status
+    cap="$(_readf "$bat/capacity")"
+    status="$(_readf "$bat/status")"
+
+    # Normalize (some systems give "Charging"/"Discharging"/"Full"/"Unknown")
+    # We only alert when NOT charging.
+    if [[ "$cap" =~ ^[0-9]+$ ]]; then
+      if (( cap <= threshold )); then
+        if [[ "$status" != "Charging" && "$status" != "Full" ]]; then
+          local now last=0
+          now="$(date +%s)"
+          [[ -r "$stamp_file" ]] && last="$(cat "$stamp_file" 2>/dev/null || echo 0)"
+
+          if (( now - last >= cooldown_seconds )); then
+            local title="Battery low: ${cap}%"
+            local msg="Battery is at ${cap}% (status: ${status}). Plug in charger for $HOSTNAME."
+            _battery_ntfy_send "$title" "$msg" 5 && echo "$now" > "$stamp_file"
+          fi
+        fi
+      fi
+    fi
+
+    sleep "$interval"
+  done
+}
+
+
+function nvmehealth() {
+  local dev="${1:-/dev/nvme0n1}"
+  local smart raw
+  local critical_warning temp_k temp_c temp_f spare spare_thr used
+  local data_read data_written power_on_hours media_errors err_logs unsafe_shutdowns
+  local t1_count t2_count
+  local status="OK"
+  local warnings=""
+  local notify_msg=""
+
+  # Dependency checks
+  command -v nvme >/dev/null 2>&1 || {
+    echo "ERROR: nvme command not found. Install with: sudo apt install nvme-cli"
+    return 1
+  }
+
+  # Read SMART log
+  smart="$(sudo nvme smart-log "$dev" 2>/dev/null)"
+  if [[ -z "$smart" ]]; then
+    echo "ERROR: Could not read SMART log from $dev"
+    return 1
+  fi
+
+  # Helper: trim leading/trailing spaces
+  trim() { sed 's/^[[:space:]]*//; s/[[:space:]]*$//'; }
+
+  # Extract values
+  critical_warning="$(echo "$smart" | awk -F: '/^critical_warning/ {print $2}' | trim)"
+  temp_k="$(echo "$smart" | awk -F'[()]' '/^temperature/ {gsub(/ K/,"",$2); print $2}' | trim)"
+  temp_f="$(echo "$smart" | awk -F: '/^temperature/ {print $2}' | sed 's/.*\([0-9][0-9]*\) °F.*/\1/' | trim)"
+  spare="$(echo "$smart" | awk -F: '/^available_spare[[:space:]]*:/ {print $2}' | tr -d '%' | trim)"
+  spare_thr="$(echo "$smart" | awk -F: '/^available_spare_threshold/ {print $2}' | tr -d '%' | trim)"
+  used="$(echo "$smart" | awk -F: '/^percentage_used/ {print $2}' | tr -d '%' | trim)"
+  data_read="$(echo "$smart" | awk -F: '/^Data Units Read/ {print $2}' | trim)"
+  data_written="$(echo "$smart" | awk -F: '/^Data Units Written/ {print $2}' | trim)"
+  power_on_hours="$(echo "$smart" | awk -F: '/^power_on_hours/ {print $2}' | trim)"
+  unsafe_shutdowns="$(echo "$smart" | awk -F: '/^unsafe_shutdowns/ {print $2}' | trim)"
+  media_errors="$(echo "$smart" | awk -F: '/^media_errors/ {print $2}' | trim)"
+  err_logs="$(echo "$smart" | awk -F: '/^num_err_log_entries/ {print $2}' | trim)"
+  t1_count="$(echo "$smart" | awk -F: '/^Thermal Management T1 Trans Count/ {print $2}' | trim)"
+  t2_count="$(echo "$smart" | awk -F: '/^Thermal Management T2 Trans Count/ {print $2}' | trim)"
+
+  # Convert K -> C if present
+  if [[ "$temp_k" =~ ^[0-9]+$ ]]; then
+    temp_c=$((temp_k - 273))
+  else
+    temp_c="?"
+  fi
+
+  # Health logic
+  if [[ "$critical_warning" != "0" && -n "$critical_warning" ]]; then
+    status="WARN"
+    warnings+="critical_warning=$critical_warning; "
+  fi
+
+  if [[ "$temp_c" != "?" ]]; then
+    if (( temp_c >= 80 )); then
+      status="WARN"
+      warnings+="temperature=${temp_c}C; "
+    fi
+  fi
+
+  if [[ "$used" =~ ^[0-9]+$ ]]; then
+    if (( used >= 80 )); then
+      status="WARN"
+      warnings+="wear_used=${used}%; "
+    fi
+  fi
+
+  if [[ "$media_errors" =~ ^[0-9]+$ ]] && (( media_errors > 0 )); then
+    status="WARN"
+    warnings+="media_errors=$media_errors; "
+  fi
+
+  if [[ "$err_logs" =~ ^[0-9]+$ ]] && (( err_logs > 0 )); then
+    status="WARN"
+    warnings+="err_logs=$err_logs; "
+  fi
+
+  if [[ "$t1_count" =~ ^[0-9]+$ ]] && (( t1_count > 0 )); then
+    status="WARN"
+    warnings+="thermal_t1_events=$t1_count; "
+  fi
+
+  if [[ "$t2_count" =~ ^[0-9]+$ ]] && (( t2_count > 0 )); then
+    status="WARN"
+    warnings+="thermal_t2_events=$t2_count; "
+  fi
+
+  # Pretty output
+  echo "========================================"
+  echo "NVMe health check"
+  echo "Device:              $dev"
+  echo "Status:              $status"
+  echo "Temperature:         ${temp_c}°C${temp_f:+ / ${temp_f}°F}"
+  echo "Percentage used:     ${used}%"
+  if [[ "$used" =~ ^[0-9]+$ ]]; then
+    echo "Health remaining:    $((100 - used))%"
+  else
+    echo "Health remaining:    ?"
+  fi
+  echo "Available spare:     ${spare}%"
+  echo "Spare threshold:     ${spare_thr}%"
+  echo "Power on hours:      $power_on_hours"
+  echo "Unsafe shutdowns:    $unsafe_shutdowns"
+  echo "Media errors:        $media_errors"
+  echo "Error log entries:   $err_logs"
+  echo "Data units read:     $data_read"
+  echo "Data units written:  $data_written"
+  echo "Thermal T1 events:   $t1_count"
+  echo "Thermal T2 events:   $t2_count"
+  [[ -n "$warnings" ]] && echo "Warnings:            $warnings"
+  echo "========================================"
+
+  # Optional ntfy integration if you already have a function/command named ntfy
+  if [[ "$status" != "OK" ]]; then
+    notify_msg="NVMe warning on $(hostname): $dev :: $warnings"
+    if command -v ntfy >/dev/null 2>&1; then
+      ntfy "$notify_msg" 2>/dev/null
+    fi
+  fi
+}
+
+
+function diskhealth() {
+  local dev="${1:-/dev/nvme0n1}"
+
+  if [[ "$dev" == /dev/nvme* ]]; then
+    nvmehealth "$dev"
+    return
+  fi
+
+  command -v smartctl >/dev/null 2>&1 || {
+    echo "ERROR: smartctl not found. Install with: sudo apt install smartmontools"
+    return 1
+  }
+
+  local smart health temp reallocated pending offline_unc status warnings
+  status="OK"
+  warnings=""
+
+  smart="$(sudo smartctl -a "$dev" 2>/dev/null)"
+  [[ -z "$smart" ]] && { echo "ERROR: Could not read SMART data from $dev"; return 1; }
+
+  health="$(echo "$smart" | awk -F: '/SMART overall-health self-assessment test result|SMART Health Status/ {print $2}' | sed 's/^[[:space:]]*//')"
+  temp="$(echo "$smart" | awk '/Temperature_Celsius|Current Drive Temperature|Temperature:/ {print $NF; exit}')"
+  reallocated="$(echo "$smart" | awk '/Reallocated_Sector_Ct/ {print $10; exit}')"
+  pending="$(echo "$smart" | awk '/Current_Pending_Sector/ {print $10; exit}')"
+  offline_unc="$(echo "$smart" | awk '/Offline_Uncorrectable/ {print $10; exit}')"
+
+  [[ -z "$health" ]] && health="UNKNOWN"
+  [[ -z "$temp" ]] && temp="?"
+  [[ -z "$reallocated" ]] && reallocated="0"
+  [[ -z "$pending" ]] && pending="0"
+  [[ -z "$offline_unc" ]] && offline_unc="0"
+
+  if [[ "$health" != *PASSED* && "$health" != *OK* && "$health" != "UNKNOWN" ]]; then
+    status="WARN"
+    warnings+="health=$health; "
+  fi
+
+  if [[ "$temp" =~ ^[0-9]+$ ]] && (( temp >= 55 )); then
+    status="WARN"
+    warnings+="temperature=${temp}C; "
+  fi
+
+  if [[ "$reallocated" =~ ^[0-9]+$ ]] && (( reallocated > 0 )); then
+    status="WARN"
+    warnings+="reallocated=$reallocated; "
+  fi
+
+  if [[ "$pending" =~ ^[0-9]+$ ]] && (( pending > 0 )); then
+    status="WARN"
+    warnings+="pending=$pending; "
+  fi
+
+  if [[ "$offline_unc" =~ ^[0-9]+$ ]] && (( offline_unc > 0 )); then
+    status="WARN"
+    warnings+="offline_uncorrectable=$offline_unc; "
+  fi
+
+  echo "========================================"
+  echo "Disk health check"
+  echo "Device:              $dev"
+  echo "Status:              $status"
+  echo "SMART overall:       $health"
+  echo "Temperature:         ${temp}°C"
+  echo "Reallocated sectors: $reallocated"
+  echo "Pending sectors:     $pending"
+  echo "Offline uncorrect.:  $offline_unc"
+  [[ -n "$warnings" ]] && echo "Warnings:            $warnings"
+  echo "========================================"
+
+  if [[ "$status" != "OK" ]]; then
+    if command -v ntfy >/dev/null 2>&1; then
+      ntfy "Disk warning on $(hostname): $dev :: $warnings" 2>/dev/null
+    fi
+  fi
+}
+
+
+
+
 function process_check() {
 # Checks if a specified app (process) is running and outputs its status.
 # Example: process_check brave    ; outputs "'$process' is running."
@@ -766,6 +1051,12 @@ echo "File '$filepath' is ready."
 }
 
 
+function wait4file_gone_ext() {
+    local ext="$2"
+    local dir="${1:-$HOME/Downloads}"
+    while find "$dir" -type f -name "$2" -print -quit 2>/dev/null | grep -q .; do sleep 1; done
+}
+
 function wait4network() {
 # Waits until there is an active internet connection.
 # Example: wait4network
@@ -892,5 +1183,291 @@ xdotool type "$@"
 function enter_text() {
 xdotool type "$@"
 }
+
+
+function screenoff() {
+xset dpms force off
+}
+
+function lockscreen() {
+cinnamon-screensaver-command --lock
+}
+
+
+function autologin() {
+    local user="$1"
+    local state="$2"
+    local session_arg="$3"
+
+    local dm=""
+    local target=""
+    local backup=""
+    local session=""
+
+    # ----------------------------
+    # Helpers
+    # ----------------------------
+    _autologin_usage() {
+        echo "Usage:"
+        echo "  autologin <username> on [session]"
+        echo "  autologin <username> off"
+        echo
+        echo "Examples:"
+        echo "  autologin \"$USER\" on"
+        echo "  autologin \"$USER\" off"
+        echo "  autologin \"$USER\" on plasma"
+    }
+
+    _autologin_detect_dm() {
+        # Best source on Debian/Mint systems
+        if [ -f /etc/X11/default-display-manager ]; then
+            local dm_path
+            dm_path="$(cat /etc/X11/default-display-manager 2>/dev/null)"
+            basename "$dm_path"
+            return 0
+        fi
+
+        # Fallback: systemd symlink
+        if [ -L /etc/systemd/system/display-manager.service ]; then
+            basename "$(readlink -f /etc/systemd/system/display-manager.service)" .service
+            return 0
+        fi
+
+        # Last fallback: common running processes
+        for x in lightdm gdm3 gdm sddm; do
+            if pgrep -x "$x" >/dev/null 2>&1; then
+                echo "$x"
+                return 0
+            fi
+        done
+
+        return 1
+    }
+
+    _autologin_backup_file() {
+        local f="$1"
+        if [ -f "$f" ]; then
+            backup="${f}.bak.$(date +%Y%m%d-%H%M%S)"
+            sudo cp -a "$f" "$backup" || return 1
+            echo "Backup created: $backup"
+        fi
+    }
+
+    _autologin_detect_session() {
+        # Explicit argument wins
+        if [ -n "$session_arg" ]; then
+            echo "$session_arg"
+            return 0
+        fi
+
+        # Common session environment vars
+        if [ -n "$XDG_SESSION_DESKTOP" ]; then
+            echo "$XDG_SESSION_DESKTOP"
+            return 0
+        fi
+
+        if [ -n "$DESKTOP_SESSION" ]; then
+            echo "$DESKTOP_SESSION"
+            return 0
+        fi
+
+        # ~/.dmrc often stores the last/default session
+        if [ -f "/home/$user/.dmrc" ]; then
+            awk -F= '
+                /^\[Desktop\]/ {in_desktop=1; next}
+                /^\[/ {in_desktop=0}
+                in_desktop && $1=="Session" {print $2; exit}
+            ' "/home/$user/.dmrc"
+            return 0
+        fi
+
+        return 1
+    }
+
+    # ----------------------------
+    # Validate args
+    # ----------------------------
+    if [ -z "$user" ] || [ -z "$state" ]; then
+        _autologin_usage
+        return 1
+    fi
+
+    if ! id "$user" >/dev/null 2>&1; then
+        echo "Error: user '$user' does not exist."
+        return 1
+    fi
+
+    case "$state" in
+        on|off) ;;
+        *)
+            _autologin_usage
+            return 1
+            ;;
+    esac
+
+    dm="$(_autologin_detect_dm)"
+    if [ -z "$dm" ]; then
+        echo "Error: could not detect display manager."
+        return 1
+    fi
+
+    echo "Detected display manager: $dm"
+
+    # ----------------------------
+    # LIGHTDM
+    # ----------------------------
+    if [ "$dm" = "lightdm" ]; then
+        target="/etc/lightdm/lightdm.conf.d/99-autologin.conf"
+
+        if [ "$state" = "on" ]; then
+            sudo mkdir -p /etc/lightdm/lightdm.conf.d || return 1
+
+            if [ -f "$target" ]; then
+                _autologin_backup_file "$target" || return 1
+            fi
+
+            sudo tee "$target" >/dev/null <<EOF
+[Seat:*]
+autologin-user=$user
+autologin-user-timeout=0
+EOF
+
+            echo "Autologin ENABLED for user '$user' in LightDM."
+            echo "Config: $target"
+            return 0
+        else
+            if [ -f "$target" ]; then
+                _autologin_backup_file "$target" || return 1
+                sudo rm -f "$target" || return 1
+                echo "Autologin DISABLED in LightDM."
+            else
+                echo "No LightDM autologin override file found. Nothing to remove."
+            fi
+            return 0
+        fi
+    fi
+
+    # ----------------------------
+    # GDM / GDM3
+    # ----------------------------
+    if [ "$dm" = "gdm3" ] || [ "$dm" = "gdm" ]; then
+        if [ -f /etc/gdm3/custom.conf ]; then
+            target="/etc/gdm3/custom.conf"
+        elif [ -f /etc/gdm/custom.conf ]; then
+            target="/etc/gdm/custom.conf"
+        else
+            echo "Error: could not find GDM custom.conf."
+            return 1
+        fi
+
+        _autologin_backup_file "$target" || return 1
+
+        if [ "$state" = "on" ]; then
+            sudo awk -v user="$user" '
+                BEGIN {
+                    daemon_found=0
+                    autologin_enable_set=0
+                    autologin_user_set=0
+                }
+                /^\[daemon\]/ {
+                    daemon_found=1
+                    print
+                    next
+                }
+                daemon_found && /^[[:space:]]*AutomaticLoginEnable[[:space:]]*=/ {
+                    if (!autologin_enable_set) {
+                        print "AutomaticLoginEnable=True"
+                        autologin_enable_set=1
+                    }
+                    next
+                }
+                daemon_found && /^[[:space:]]*AutomaticLogin[[:space:]]*=/ {
+                    if (!autologin_user_set) {
+                        print "AutomaticLogin=" user
+                        autologin_user_set=1
+                    }
+                    next
+                }
+                { print }
+                END {
+                    if (!daemon_found) {
+                        print ""
+                        print "[daemon]"
+                        print "AutomaticLoginEnable=True"
+                        print "AutomaticLogin=" user
+                    } else {
+                        if (!autologin_enable_set) print "AutomaticLoginEnable=True"
+                        if (!autologin_user_set) print "AutomaticLogin=" user
+                    }
+                }
+            ' "$target" | sudo tee "${target}.tmp" >/dev/null && sudo mv "${target}.tmp" "$target" || return 1
+
+            echo "Autologin ENABLED for user '$user' in GDM."
+            echo "Config: $target"
+            return 0
+        else
+            sudo awk '
+                /^\[daemon\]/ { print; next }
+                /^[[:space:]]*AutomaticLoginEnable[[:space:]]*=/ { next }
+                /^[[:space:]]*AutomaticLogin[[:space:]]*=/ { next }
+                { print }
+            ' "$target" | sudo tee "${target}.tmp" >/dev/null && sudo mv "${target}.tmp" "$target" || return 1
+
+            echo "Autologin DISABLED in GDM."
+            echo "Config cleaned: $target"
+            return 0
+        fi
+    fi
+
+    # ----------------------------
+    # SDDM
+    # ----------------------------
+    if [ "$dm" = "sddm" ]; then
+        target="/etc/sddm.conf.d/autologin.conf"
+
+        if [ "$state" = "on" ]; then
+            sudo mkdir -p /etc/sddm.conf.d || return 1
+
+            session="$(_autologin_detect_session)"
+            if [ -z "$session" ]; then
+                echo "Error: SDDM usually needs a session name too."
+                echo "Could not auto-detect session."
+                echo "Try for example:"
+                echo "  autologin \"$user\" on plasma"
+                echo "  autologin \"$user\" on cinnamon"
+                return 1
+            fi
+
+            if [ -f "$target" ]; then
+                _autologin_backup_file "$target" || return 1
+            fi
+
+            sudo tee "$target" >/dev/null <<EOF
+[Autologin]
+User=$user
+Session=$session
+Relogin=false
+EOF
+
+            echo "Autologin ENABLED for user '$user' in SDDM."
+            echo "Session: $session"
+            echo "Config: $target"
+            return 0
+        else
+            if [ -f "$target" ]; then
+                _autologin_backup_file "$target" || return 1
+                sudo rm -f "$target" || return 1
+                echo "Autologin DISABLED in SDDM."
+            else
+                echo "No SDDM autologin override file found. Nothing to remove."
+            fi
+            return 0
+        fi
+    fi
+
+    echo "Error: unsupported or unhandled display manager: $dm"
+    return 1
+}
+
 
 
