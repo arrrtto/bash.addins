@@ -2,7 +2,7 @@
 
 # General system module
 MODULE_NAME="system"
-MODULE_VERSION="1.08"
+MODULE_VERSION="1.09"
 MODULE_DESCRIPTION="System utilities, files and process management"
 
 
@@ -279,6 +279,11 @@ echo "Available Swap: $free_swap of $total_swap" | sed_comma2dot
 function freespace() {
 # Shows free (available) disk space.
 df -h | grep "^/" | grep -Ev "boot" | awk '{print "Free space on", $1":", $4"B"}'
+}
+
+
+function battery_left() {
+echo "$(cat /sys/class/power_supply/BAT0/capacity)%"
 }
 
 

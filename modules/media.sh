@@ -132,6 +132,24 @@ rm clearmetadata.*
 }
 
 
+function audiosync() {
+# Syncs audio and video of a mp4 video file if the audio is off by 0.26 seconds
+# Example: audiosync this.mp4
+
+    if [ $# -ne 1 ]; then
+        echo "Syncs audio and video of a mp4 video file if the audio is off by 0.26 seconds."
+        echo "Usage example: audiosync this.mp4"
+        return 1
+    fi
+    input="$1"
+    base="${input%.*}"   # Remove extension
+    out="${base}_synced.mp4"
+    ffmpeg -i "$input" -itsoffset 0.2666667 -i "$input" -map 1:v:0 -map 0:a:0 -c copy -map_metadata 0 -movflags +faststart "$out"
+}
+
+
+
+
 
 
 # ------------ IMAGE PROCESSING ----------------
