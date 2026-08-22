@@ -203,10 +203,141 @@ function whatdate() {
 }
 
 
-datetimenow() {
+function datetimenow() {
 date +"%d.%m.%Y_%H.%M"
 }
 
+
+function timer() {
+    local input="$*"
+
+    [[ -z "$input" ]] && {
+        echo "Usage:"
+        echo "timer 23.06.2026 08:00"
+        echo "timer tomorrow 20:00"
+        echo "today 09:00"
+        echo "next friday 17:00"
+        return 1
+    }
+
+    local target_epoch
+
+    # Estonian style DD.MM.YYYY HH:MM
+    if [[ "$input" =~ ^([0-9]{2})\.([0-9]{2})\.([0-9]{4})[[:space:]]+([0-9]{2}:[0-9]{2}(:[0-9]{2})?)$ ]]; then
+        local d="${BASH_REMATCH[1]}"
+        local m="${BASH_REMATCH[2]}"
+        local y="${BASH_REMATCH[3]}"
+        local t="${BASH_REMATCH[4]}"
+
+        target_epoch=$(date -d "$y-$m-$d $t" +%s 2>/dev/null) || {
+            echo "Invalid date/time."
+            return 1
+        }
+    else
+        # Let GNU date handle things like:
+        # tomorrow 20:00
+        # today 08:00
+        # next friday 17:00
+        target_epoch=$(date -d "$input" +%s 2>/dev/null) || {
+            echo "Invalid date/time."
+            return 1
+        }
+    fi
+
+    echo "Waiting until: $(date -d "@$target_epoch" '+%d.%m.%Y %H:%M:%S')"
+    while (( $(date +%s) < target_epoch )); do 
+        remaining=$((target_epoch - $(date +%s)))
+        (( remaining <= 0 )) && break
+        if (( remaining > 300 )); then
+          sleep 60
+        elif (( remaining > 60 )); then
+          sleep 10
+        else
+          sleep 1
+        fi
+    done
+    echo "Timer finished."
+}
+
+
+function reminderd() {
+    # Check minimum args
+    if [ $# -lt 2 ]; then
+        echo "Meant for sending timed reminders via ntfy.sh topic from reminders.txt"
+        echo "Usage: "
+        echo "reminderd /home/$USER/reminders.txt ntfytopic"
+        echo "Run in background: nohup bash -c 'source ~/.bashrc; reminderd /home/$USER/reminders.txt ntfytopic' >/tmp/reminderd.log 2>&1 &"
+        echo "Check log: tail -f /tmp/reminderd.log"
+        echo
+        echo "reminders.txt file contents format should look like:"
+        echo "ONCE 23.06.2026 08:00|Car repair"
+        echo "DAILY 08:00|Check Telegram groups"
+        echo "DAILY 22:00|Backup server"
+        echo "WEEKLY Mon 09:00|Team meeting"
+        echo "MONTHLY 1 10:00|Pay bills"
+        return 1
+    fi
+
+    ntfytopic="$2"
+    local file="${1:-$HOME/reminders.txt}"
+    local sent_file="$HOME/reminderd.sent"
+
+    touch "$file"
+    touch "$sent_file"
+
+    while true; do
+        local now_date now_time now_day now_dom now_key
+        now_date=$(date '+%d.%m.%Y')
+        now_time=$(date '+%H:%M')
+        now_day=$(date '+%a')      # Mon, Tue, Wed...
+        now_dom=$(date '+%-d')     # 1, 2, 3...
+
+        while IFS='|' read -r rule message; do
+            [[ -z "$rule" || "$rule" =~ ^# ]] && continue
+
+            local type a b c key match
+            match=false
+            read -r type a b c <<< "$rule"
+
+            case "$type" in
+                ONCE)
+                    # ONCE 23.06.2026 08:00
+                    [[ "$a" == "$now_date" && "$b" == "$now_time" ]] && match=true
+                    key="$rule|$message"
+                    ;;
+
+                DAILY)
+                    # DAILY 08:00
+                    [[ "$a" == "$now_time" ]] && match=true
+                    key="$(date '+%Y-%m-%d')|$rule|$message"
+                    ;;
+
+                WEEKLY)
+                    # WEEKLY Mon 09:00
+                    [[ "$a" == "$now_day" && "$b" == "$now_time" ]] && match=true
+                    key="$(date '+%Y-%m-%d')|$rule|$message"
+                    ;;
+
+                MONTHLY)
+                    # MONTHLY 1 10:00
+                    [[ "$a" == "$now_dom" && "$b" == "$now_time" ]] && match=true
+                    key="$(date '+%Y-%m')|$rule|$message"
+                    ;;
+            esac
+
+            if [[ "$match" == true ]] && ! grep -Fxq "$key" "$sent_file"; then
+                echo "Reminder: $message"
+
+                curl -s -d "$message" "https://ntfy.sh/$ntfytopic" >/dev/null
+
+                echo "$key" >> "$sent_file"
+            fi
+
+        done < "$file"
+
+        sleep 60
+    done
+}
 
 
 
@@ -686,6 +817,15 @@ done < "$input_file"
 }
 
 
+findfiles() {
+    if (( $# == 0 )); then
+        echo 'Usage: findfiles "glob pattern here"' >&2
+        echo 'Example: findfiles "*.lock"' >&2
+        return 2
+    fi
+    find . -type f -iname "$*" -printf '%p\n'
+}
+
 
 function replace_extension() {
 # Replaces the file extension of all files with a specified old extension to a new extension.
@@ -850,7 +990,23 @@ echo "---------------------------------------"
 }
 
 
+function foldersize() {
+# Shows the total size of a folder (or current directory if omitted).
+# Example:
+#   foldersize
+#   foldersize ~/Downloads
+local dir="${1:-.}"
+if [[ ! -d "$dir" ]]; then echo "Directory not found: $dir"; return 1; fi
+du -sh -- "$dir"
+}
 
+function foldersizes() {
+# Shows sizes of immediate subfolders, largest first.
+# Example: foldersizes ~/Downloads
+local dir="${1:-.}"
+[[ -d "$dir" ]] || { echo "Directory not found: $dir"; return 1; }
+du -sh "$dir"/* 2>/dev/null | sort -hr
+}
 
 #####################################
 # WAIT4 UTILITIES — standardized set
