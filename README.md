@@ -1,86 +1,191 @@
-# bash.addins
+# BASH Addins
 
-Enhanced bash scripting library with modular functionality for GNU/Linux operating systems, started by Artto Aunap (https://github.com/arrrtto) in 2025 for personal use, but in 2025 decided to share with the GNU/Linux and FOSS community.
+BASH Addins is a modular library of practical Bash functions and aliases for GNU/Linux. It adds memorable commands for everyday jobs such as finding files, cleaning text, checking a computer, converting media, handling PDFs, controlling X11 windows and working with RSS feeds.
 
-The whole point of it is to load additional useful alias commands and functions (as commands) into Terminal or BASH scripts, to simplify the use of various processes regarding files, windows, texts processings, RegEx, etc.
+It was started by [Artto Aunap](https://github.com/arrrtto) in 2025 for personal use and is now shared with the GNU/Linux and FOSS community.
 
-BASH Addins is intended to work as one singular file containing all the functions and aliases, and that file (bash.addins) is supposed to be on a PATH (e.g. in ~/bin folder) and get loaded into Terminal when Terminal is opened (that happens automatically during installation below, as "source bash.addins" is added into .bashrc file). That file gets generated and put into its correct location ("installed") when using the installer (see below).
+## What does it look like?
 
-Adding "source bash.addins" command can also be added into own local BASH scripts to use the available BASH Addins functions. Many of such functions are meant to be used with command piping (e.g. those regex commands).
+After installation, functions can be used like ordinary Terminal commands:
 
+```bash
+# See memory and disk information
+systeminfo
 
-BASH Addins is a work in progress and far from "complete". It already does a lot, even though there may be bugs or missing features :)
-Happy using, and contributing via GitHub, if you want to help make BASH Addins better! :)
+# Find large files below the current folder
+bigfiles +500M
 
+# Convert WAV recordings to MP3
+to_mp3 *.wav
 
-## Dependencies as of right now
-qrencode ffmpeg wget sane-utils imagemagick ghostscript xdotool curl csvkit imagemagick wmctrl xclip x11-apps tesseract-ocr scrot gnome-screenshot jq python3-full python3-xlsxwriter python3-openpyxl python3-odf python3-pdfkit csvkit html2text docx2txt xlsx2csv mupdf unoconv libreoffice libreoffice-script-provider-python sox pdftk
+# Extract email addresses from a file
+cat contacts.txt | regex_email
 
+# Show the latest video from a YouTube channel feed
+rss_youtube_lastvideo UCDr1XkQaCr4IgrMVN0_28yg
+```
 
-## Features / Modules
-:: BASH Addins is organized into several modules, that contain functions/aliases that get combined into the bash.addins file, when running ./installer setup or ./installer compile
+Many text functions are designed for piping. The pipe character `|` sends one command's output into the next command:
 
-- `main.sh`: Basic stuff for the bash.addins to work
-- `aliases.sh`: Contains various useful aliases to use in Terminal
-- `system.sh`: System utilities and process management
-- `fancy.sh`: Fancy cool functions for extra enjoyment
-- `text.sh`: Text processing and RegEx functions
-- `gui.sh`: GUI window management
-- `media.sh`: Audio/Video/Image processing
-- `crypto.sh`: Cryptocurrency related utilities
+```bash
+cat prices.txt | sed_comma2dot | regex_awk_sum
+```
 
+For explanations, practical use cases, examples and safety notes for **every function and alias**, see **[Functionality.md](Functionality.md)**.
 
-## Installation of BASH Addins using the installer script
+## How it works
+
+Source files are organized into modules. The installer combines them into one generated file:
+
+```text
+~/bin/bash.addins
+```
+
+The installer also adds this line to `~/.bashrc`, so the commands become available whenever a new Bash Terminal opens:
+
+```bash
+source ~/bin/bash.addins
+```
+
+You can load the library inside your own Bash scripts too:
+
+```bash
+#!/bin/bash
+source "$HOME/bin/bash.addins"
+
+if numgt 5.2 3.1; then
+    echo "The first number is greater."
+fi
+```
+
+## Modules
+
+| Module | What it provides |
+|---|---|
+| `main.sh` | Core discovery commands for listing installed functions and aliases. |
+| `aliases.sh` | Short everyday commands for listing files, updating Debian systems, finding files and checking IP addresses. |
+| `system.sh` | System information, disk health, reminders, timers, RAM drives, file management, process control and automation wait helpers. |
+| `text.sh` | Piped text cleanup, pattern extraction, line selection, number comparison, JSON filtering and CSV-style sorting. |
+| `media.sh` | Audio/video conversion, screenshots, scanning, OCR, PDF processing, screen/audio recording and clipboard helpers. |
+| `gui.sh` | X11 window focusing, resizing, minimizing, closing, inspecting and screenshot capture. |
+| `fancy.sh` | Gradient Terminal text and a gradient download progress display. |
+| `rss.sh` | YouTube, GitHub and general RSS/Atom feed helpers. |
+| `crypto.sh` | Cryptocurrency-related information utilities. |
+
+## Installation
+
+BASH Addins currently provides automatic dependency installation for Debian-family systems such as Debian, Ubuntu, Linux Mint and LMDE.
 
 1. Download the installer:
+
 ```bash
 wget https://raw.githubusercontent.com/arrrtto/bash.addins/refs/heads/main/installer
 ```
 
-2. Make the installer script executable:
+2. Make it executable:
+
 ```bash
-chmod +x ./installer
+chmod +x installer
 ```
 
-3. Run setup to install necessary additional software packages (dependencies) (works for Debian based systems currently) and to automatically generate the bash.addins file from modules:
+3. Run setup:
+
 ```bash
 ./installer setup
 ```
 
-or just run ./installer to see what other options there are, if you like. After a successful installation you should have a ~/bin/bash.addins file and it automatically loaded next time you open Terminal. Then you can start using the functions and aliases. 
+Setup will:
 
+- update available APT package information;
+- install available optional dependencies one by one;
+- skip and report packages unavailable from enabled repositories;
+- download the current modules when needed;
+- compile `bash.addins`;
+- move it to `~/bin/bash.addins`;
+- add it to `~/.bashrc`.
 
-## Usage of BASH Addins after a successful installation
+Open a new Terminal afterward, or load it immediately with:
 
 ```bash
-# Show available functions and their descriptions
-showallfunctions
-
-# Show available aliases
-showaliases
+source "$HOME/bin/bash.addins"
 ```
 
-## Module Documentation
+Run the installer without an argument to see all installer commands:
 
-Each module has its own documentation and versioning info inside the module files themselves. Check the specific module documentation for detailed usage instructions or run showallfunctions or showaliases
+```bash
+./installer
+```
 
-Here is a demonstrational video: https://odysee.com/@A-Computer-Service:e/bash.addins:6
+## First commands to try
+
+```bash
+# Browse all functions and short descriptions
+showallfunctions
+
+# Browse aliases
+showaliases
+
+# Count installed functions
+functions_amount
+
+# Read the complete guide
+less Functionality.md
+```
+
+## Dependencies
+
+Different functions need different programs. The installer attempts to install the main packages separately, so one unavailable optional package does not prevent other packages or the library itself from being installed.
+
+Examples include FFmpeg, ImageMagick, Tesseract OCR, Ghostscript, LibreOffice, jq, curl, wget, rsync, smartmontools, nvme-cli, X11 tools and PulseAudio/PipeWire-Pulse utilities. See the [dependency section in Functionality.md](Functionality.md#dependencies) for feature-specific details.
+
+## Important notes
+
+- BASH Addins is a work in progress. Please keep backups and review commands before using bulk rename, delete, resize, PDF replacement, RAM-drive or autologin functions.
+- GUI automation functions are primarily for X11/Xorg. They may not work under Wayland.
+- Some functions require `sudo` and will ask for your administrator password.
+- Network information functions contact the service named in their description.
+
+## Updating and compiling
+
+Download current modules, compile and install them:
+
+```bash
+./installer update
+```
+
+Compile the module files already present locally:
+
+```bash
+./installer compile
+```
+
+Reload the installed library in the current Terminal:
+
+```bash
+reload
+```
+
+## Demonstration
+
+[Watch the BASH Addins demonstration video on Odysee](https://odysee.com/@A-Computer-Service:e/bash.addins:6).
 
 ## Contributing
 
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Open a Pull Request
+Contributions, bug reports and clearer examples are welcome:
 
-## Discussions
+1. Fork the repository.
+2. Create a feature branch.
+3. Make and test your changes.
+4. Push the branch.
+5. Open a pull request.
 
-If you want to ask about something, you can contact me (Artto) via e-mail artto@tuta.com or via Telegram Messenger @divineloveartto
+## Contact
+
+- Email: `artto@tuta.com`
+- Telegram: `@divineloveartto`
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details. Overall it is free software, as defined by Free Software Foundation - free to modify, to benefit humanity.
+BASH Addins is licensed under the [MIT License](LICENSE). It is free software: you may use, study, modify and share it.
 
-
-// With Love from Artto (July 2025)
+_With Love from Artto_
