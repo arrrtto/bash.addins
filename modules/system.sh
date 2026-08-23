@@ -368,46 +368,594 @@ function reminderd() {
 # ------------ SYSTEM RELATED ------------
 
 function systeminfo() {
-# Displays comprehensive system information, including OS details, RAM memory, CPU and disk usage.
+# Displays comprehensive system information.
+# Usage:
+#   systeminfo
+#   systeminfo --full
+
+local mode="${1:-normal}"
+
+if [[ "$mode" != "normal" && "$mode" != "--full" ]]; then
+    echo "Usage: systeminfo [--full]"
+    return 2
+fi
+
 clear
+
 local RED='\033[0;31m'
 local GREEN='\033[0;32m'
 local YELLOW='\033[0;33m'
 local BLUE='\033[0;34m'
-local NC='\033[0m' # No Color
+local CYAN='\033[0;36m'
+local NC='\033[0m'
 
-local cpu_model=$(lscpu | grep "Model name" | awk -F: '{print $2}' | xargs)
-local install_date=$(ls -ld / | awk '{print $7".", $6, $8}')
-local total_mem=$(free -h | grep Mem | awk '{print $2}' | sed 's/Gi/ GB/')
-local available_mem=$(free -h | grep Mem | awk '{print $7}' | sed 's/Gi/ GB/')
-local os_info=$(lsb_release -d | awk -F: '{print $2}' | xargs)
-local os_version=$(lsb_release -d | awk -F: '{print $2}' | xargs | sed_keep_price)
-local os_mint=$(lsb_release -d | grep -o 'Mint')
-local kernel_version=$(uname -r)
-local uptime_info=$(uptime -p)
-local hostname_info=$(hostname)
+local ID=""
+local VERSION_ID=""
+local PRETTY_NAME=""
+local VERSION_CODENAME=""
 
-curl -sX 'GET' "https://endoflife.date/api/v1/products/linuxmint" -H "accept: application/json" > /tmp/eolapi.json
-releases=() && while read -r r; do releases+=("$r"); done < <(jq -r '.result.releases[].name' /tmp/eolapi.json)
-counter="0"
-for version_number in ${releases[@]}; do
- if [[ $version_number = $os_version ]]; then break; fi  # scan through the version numbers
- counter=$((counter + 1))
+local os_info="Unknown"
+local kernel_version
+local architecture
+local uptime_info
+local last_boot
+local hostname_info
+local computer_model="Unknown"
+
+local cpu_model="Unknown"
+local cpu_cores="Unknown"
+local cpu_threads="Unknown"
+local load_info="Unknown"
+
+local gpu_info="Not detected"
+local gpu_driver="Unknown"
+local temperature_info="Unavailable"
+
+local total_mem="Unknown"
+local available_mem="Unknown"
+local used_mem="Unknown"
+local swap_info="Unknown"
+
+local root_disk_info="Unknown"
+local desktop_info
+local local_ip="Not connected"
+local battery_info="Not present"
+
+local pending_updates="Unknown"
+local reboot_status="No"
+
+local install_date="Unknown"
+local install_date_source=""
+
+local support_product=""
+local support_release=""
+local support_end=""
+local extended_support_end=""
+local support_status="Unknown"
+local eol_json=""
+
+# ------------------------------------------------------------
+# OPERATING SYSTEM
+# ------------------------------------------------------------
+
+if [[ -r /etc/os-release ]]; then
+    source /etc/os-release
+fi
+
+if command -v lsb_release >/dev/null 2>&1; then
+    os_info=$(
+        lsb_release -d 2>/dev/null |
+            awk -F: '{print $2}' |
+            xargs
+    )
+elif [[ -n "$PRETTY_NAME" ]]; then
+    os_info="$PRETTY_NAME"
+fi
+
+kernel_version=$(uname -r)
+architecture=$(uname -m)
+uptime_info=$(uptime -p 2>/dev/null)
+hostname_info=$(hostname)
+last_boot=$(uptime -s 2>/dev/null)
+
+# ------------------------------------------------------------
+# APPROXIMATE INSTALLATION DATE
+# ------------------------------------------------------------
+
+# Installer logs are usually the best available indication.
+if [[ -e /var/log/installer/syslog ]]; then
+    install_date=$(stat -c '%y' /var/log/installer/syslog 2>/dev/null)
+    install_date=${install_date%% *}
+    install_date_source="installer log"
+
+elif [[ -e /var/log/installer ]]; then
+    install_date=$(stat -c '%y' /var/log/installer 2>/dev/null)
+    install_date=${install_date%% *}
+    install_date_source="installer directory"
+
+else
+    # Filesystem birth time may be unavailable or may not equal installation.
+    install_date=$(stat -c '%w' / 2>/dev/null)
+
+    if [[ -n "$install_date" && "$install_date" != "-" ]]; then
+        install_date=${install_date%% *}
+        install_date_source="root filesystem creation"
+    else
+        install_date="Unknown"
+    fi
+fi
+
+# ------------------------------------------------------------
+# COMPUTER MODEL
+# ------------------------------------------------------------
+
+computer_model=$(
+    {
+        cat /sys/devices/virtual/dmi/id/sys_vendor 2>/dev/null
+        cat /sys/devices/virtual/dmi/id/product_name 2>/dev/null
+    } |
+        awk 'NF' |
+        paste -sd ' ' -
+)
+
+[[ -n "$computer_model" ]] || computer_model="Unknown"
+
+# ------------------------------------------------------------
+# CPU
+# ------------------------------------------------------------
+
+cpu_model=$(
+    lscpu 2>/dev/null |
+        awk -F: '
+            /Model name/ {
+                sub(/^[[:space:]]+/, "", $2)
+                print $2
+                exit
+            }
+        '
+)
+
+[[ -n "$cpu_model" ]] || cpu_model="Unknown"
+
+cpu_cores=$(
+    lscpu -p=CORE 2>/dev/null |
+        grep -Ev '^#' |
+        sort -u |
+        wc -l
+)
+
+cpu_threads=$(nproc 2>/dev/null)
+load_info=$(awk '{print $1 ", " $2 ", " $3}' /proc/loadavg)
+
+# ------------------------------------------------------------
+# GPU
+# ------------------------------------------------------------
+
+gpu_info=$(
+    lspci 2>/dev/null |
+        awk -F ': ' '
+            /VGA compatible controller|3D controller|Display controller/ {
+                gpu=$2
+                sub(/ \(rev [^)]+\)$/, "", gpu)
+
+                if (!seen[gpu]++) {
+                    if (output != "")
+                        output=output "; "
+
+                    output=output gpu
+                }
+            }
+
+            END {
+                if (output == "")
+                    output="Not detected"
+
+                print output
+            }
+        '
+)
+
+gpu_driver=$(
+    lspci -nnk 2>/dev/null |
+        awk '
+            /VGA compatible controller|3D controller|Display controller/ {
+                found=1
+                next
+            }
+
+            found && /Kernel driver in use:/ {
+                sub(/^[[:space:]]*Kernel driver in use:[[:space:]]*/, "")
+
+                if (!seen[$0]++) {
+                    if (drivers != "")
+                        drivers=drivers "; "
+
+                    drivers=drivers $0
+                }
+
+                found=0
+            }
+
+            END {
+                if (drivers != "")
+                    print drivers
+            }
+        '
+)
+
+[[ -n "$gpu_driver" ]] || gpu_driver="Unknown"
+
+# ------------------------------------------------------------
+# TEMPERATURE
+# ------------------------------------------------------------
+
+if command -v sensors >/dev/null 2>&1; then
+    temperature_info=$(
+        sensors 2>/dev/null |
+            awk '
+                /Package id 0:|Tctl:|Tdie:|CPU:/ {
+                    print $1, $2
+                    exit
+                }
+            '
+    )
+
+    [[ -n "$temperature_info" ]] ||
+        temperature_info="No readable sensor"
+fi
+
+# ------------------------------------------------------------
+# MEMORY AND SWAP
+# ------------------------------------------------------------
+
+total_mem=$(
+    free -h |
+        awk '/^Mem:/ {print $2}' |
+        sed 's/Gi/ GB/; s/Mi/ MB/'
+)
+
+used_mem=$(
+    free -h |
+        awk '/^Mem:/ {print $3}' |
+        sed 's/Gi/ GB/; s/Mi/ MB/'
+)
+
+available_mem=$(
+    free -h |
+        awk '/^Mem:/ {print $7}' |
+        sed 's/Gi/ GB/; s/Mi/ MB/'
+)
+
+swap_info=$(
+    free -h |
+        awk '
+            /^Swap:/ {
+                print $3 " used / " $2 " total"
+            }
+        ' |
+        sed 's/Gi/ GB/g; s/Mi/ MB/g'
+)
+
+# ------------------------------------------------------------
+# STORAGE
+# ------------------------------------------------------------
+
+root_disk_info=$(
+    df -hP / |
+        awk '
+            NR == 2 {
+                print $3 " used / " $2 " total (" $5 "), " $4 " free"
+            }
+        '
+)
+
+# ------------------------------------------------------------
+# DESKTOP AND NETWORK
+# ------------------------------------------------------------
+
+desktop_info="${XDG_CURRENT_DESKTOP:-Unknown} / ${XDG_SESSION_TYPE:-Unknown}"
+
+local_ip=$(
+    hostname -I 2>/dev/null |
+        awk '{print $1}'
+)
+
+[[ -n "$local_ip" ]] || local_ip="Not connected"
+
+# ------------------------------------------------------------
+# BATTERY
+# ------------------------------------------------------------
+
+local battery_path
+local capacity
+local battery_status
+
+for battery_path in /sys/class/power_supply/BAT*; do
+    [[ -d "$battery_path" ]] || continue
+
+    capacity=$(cat "$battery_path/capacity" 2>/dev/null)
+    battery_status=$(cat "$battery_path/status" 2>/dev/null)
+
+    battery_info="${capacity:-?}% (${battery_status:-unknown})"
+    break
 done
 
-echo -e "${BLUE}Operating System:${NC} $os_info"
-echo -e "${YELLOW}Installation Date:${NC} $install_date"
-if [[ $version_number != "" ]] && [[ $os_mint == "Mint" ]]; then echo -e "${YELLOW}End of Support:${NC}" $(jq -r ".result.releases["$counter"].eolFrom" /tmp/eolapi.json); fi
-echo -e "${YELLOW}Kernel Version:${NC} $kernel_version"
-echo -e "${YELLOW}Uptime:${NC} $uptime_info"
-echo -e "${YELLOW}Hostname:${NC} $hostname_info"
-echo -e "${GREEN}CPU Model:${NC} $cpu_model"
-echo -e "${GREEN}Total Memory:${NC} $total_mem | out of which $available_mem is available" | sed_comma2dot
-echo -e "${BLUE}Disks:${NC}"
-df -h | grep "^/" | grep -Ev "boot" | awk '{print $1" -", $2"B total", "|", $4"B free"}' | sed_comma2dot
+# ------------------------------------------------------------
+# UPDATES AND REBOOT STATUS
+# ------------------------------------------------------------
+
+if command -v apt >/dev/null 2>&1; then
+    pending_updates=$(
+        apt list --upgradable 2>/dev/null |
+            awk '
+                NR > 1 {
+                    count++
+                }
+
+                END {
+                    print count+0
+                }
+            '
+    )
+fi
+
+[[ -f /var/run/reboot-required ]] &&
+    reboot_status="Yes"
+
+# ------------------------------------------------------------
+# OFFICIAL SUPPORT INFORMATION
+# ------------------------------------------------------------
+
+case "$ID" in
+    linuxmint)
+        support_product="linuxmint"
+
+        # LMDE releases use names such as lmde6 and lmde7 in the API.
+        if [[ "$PRETTY_NAME" == *LMDE* ]] ||
+           grep -qi 'LMDE' /etc/linuxmint/info 2>/dev/null; then
+            support_release="lmde${VERSION_ID%%.*}"
+        else
+            support_release="$VERSION_ID"
+        fi
+        ;;
+
+    debian)
+        support_product="debian"
+        support_release="${VERSION_ID%%.*}"
+        ;;
+
+    ubuntu)
+        support_product="ubuntu"
+        support_release="$VERSION_ID"
+        ;;
+esac
+
+if [[ -n "$support_product" && -n "$support_release" ]]; then
+    eol_json=$(
+        curl -fsSL \
+            --connect-timeout 5 \
+            --max-time 15 \
+            --retry 2 \
+            "https://endoflife.date/api/v1/products/$support_product/" \
+            2>/dev/null
+    )
+
+    if jq -e . >/dev/null 2>&1 <<< "$eol_json"; then
+        support_end=$(
+            jq -r \
+                --arg release "$support_release" \
+                '
+                    .result.releases[]
+                    | select(.name == $release)
+                    | .eolFrom // empty
+                ' \
+                <<< "$eol_json"
+        )
+
+        extended_support_end=$(
+            jq -r \
+                --arg release "$support_release" \
+                '
+                    .result.releases[]
+                    | select(.name == $release)
+                    | .eoesFrom // empty
+                ' \
+                <<< "$eol_json"
+        )
+
+        support_status=$(
+            jq -r \
+                --arg release "$support_release" \
+                '
+                    .result.releases[]
+                    | select(.name == $release)
+                    | if .isMaintained == true
+                      then "Supported"
+                      else "Unsupported"
+                      end
+                ' \
+                <<< "$eol_json"
+        )
+
+        [[ -n "$support_status" ]] ||
+            support_status="Release not found"
+    else
+        support_status="Could not retrieve support information"
+    fi
+fi
+
+# ------------------------------------------------------------
+# NORMAL OUTPUT
+# ------------------------------------------------------------
+
+printf '%b\n' "${BLUE}SYSTEM${NC}"
+printf '%b\n' "${BLUE}Operating System:${NC} $os_info"
+printf '%b\n' "${YELLOW}Support Status:${NC} $support_status"
+
+if [[ -n "$support_end" ]]; then
+    printf '%b\n' \
+        "${YELLOW}Standard Support Ends:${NC} $support_end"
+
+elif [[ "$support_release" == lmde* &&
+        "$support_status" == "Supported" ]]; then
+    printf '%b\n' \
+        "${YELLOW}Support End:${NC} Not officially announced"
+fi
+
+if [[ -n "$extended_support_end" ]]; then
+    printf '%b\n' \
+        "${YELLOW}Extended/LTS Support Ends:${NC} $extended_support_end"
+fi
+
+if [[ "$install_date" != "Unknown" ]]; then
+    printf '%b\n' \
+        "${YELLOW}Approximate Installation Date:${NC} $install_date ($install_date_source)"
+else
+    printf '%b\n' \
+        "${YELLOW}Approximate Installation Date:${NC} Unknown"
+fi
+
+printf '%b\n' "${YELLOW}Kernel:${NC} $kernel_version ($architecture)"
+printf '%b\n' "${YELLOW}Uptime:${NC} $uptime_info"
+printf '%b\n' "${YELLOW}Last Boot:${NC} $last_boot"
+printf '%b\n' "${YELLOW}Hostname:${NC} $hostname_info"
+printf '%b\n' "${YELLOW}Computer:${NC} $computer_model"
+printf '%b\n' "${BLUE}Desktop/Session:${NC} $desktop_info"
+
 echo
+printf '%b\n' "${GREEN}HARDWARE${NC}"
+printf '%b\n' "${GREEN}CPU:${NC} $cpu_model"
+printf '%b\n' \
+    "${GREEN}CPU Cores/Threads:${NC} $cpu_cores cores / $cpu_threads threads"
+printf '%b\n' "${GREEN}System Load:${NC} $load_info"
+printf '%b\n' "${GREEN}GPU:${NC} $gpu_info"
+printf '%b\n' "${GREEN}GPU Driver:${NC} $gpu_driver"
+printf '%b\n' "${GREEN}Temperature:${NC} $temperature_info"
+printf '%b\n' \
+    "${GREEN}RAM:${NC} $used_mem used / $total_mem total | $available_mem available"
+printf '%b\n' "${GREEN}Swap:${NC} $swap_info"
+printf '%b\n' "${GREEN}Battery:${NC} $battery_info"
+
 echo
-if [[ -f /tmp/eolapi.json ]]; then rm /tmp/eolapi.json; fi  # delete the json file, if it exists
+printf '%b\n' "${BLUE}STORAGE AND NETWORK${NC}"
+printf '%b\n' "${BLUE}Root Filesystem:${NC} $root_disk_info"
+printf '%b\n' "${BLUE}Local IP:${NC} $local_ip"
+printf '%b\n' "${YELLOW}Pending Updates:${NC} $pending_updates"
+printf '%b\n' "${YELLOW}Reboot Required:${NC} $reboot_status"
+
+# ------------------------------------------------------------
+# EXTENDED OUTPUT
+# ------------------------------------------------------------
+
+if [[ "$mode" == "--full" ]]; then
+    echo
+    printf '%b\n' "${CYAN}ALL PHYSICAL DISKS${NC}"
+
+    if command -v lsblk >/dev/null 2>&1; then
+        lsblk \
+            -o NAME,MODEL,SIZE,TYPE,FSTYPE,MOUNTPOINTS \
+            -e 7
+    else
+        echo "lsblk is unavailable."
+    fi
+
+    echo
+    printf '%b\n' "${CYAN}FILESYSTEM USAGE${NC}"
+    df -hT \
+        -x tmpfs \
+        -x devtmpfs \
+        -x squashfs
+
+    echo
+    printf '%b\n' "${CYAN}ACTIVE NETWORK INTERFACES${NC}"
+
+    if command -v ip >/dev/null 2>&1; then
+        ip -brief address show up
+    else
+        echo "The ip command is unavailable."
+    fi
+
+    echo
+    printf '%b\n' "${CYAN}VIRTUALIZATION${NC}"
+
+    if command -v systemd-detect-virt >/dev/null 2>&1; then
+        local virtualization
+        virtualization=$(systemd-detect-virt 2>/dev/null)
+
+        [[ "$virtualization" == "none" ]] &&
+            virtualization="Physical machine"
+
+        echo "$virtualization"
+    else
+        echo "Unknown"
+    fi
+
+    echo
+    printf '%b\n' "${CYAN}SECURE BOOT${NC}"
+
+    if command -v mokutil >/dev/null 2>&1; then
+        mokutil --sb-state 2>/dev/null ||
+            echo "Unable to determine Secure Boot status."
+    else
+        echo "mokutil is not installed."
+    fi
+
+    echo
+    printf '%b\n' "${CYAN}ROOT FILESYSTEM SOURCE${NC}"
+
+    if command -v findmnt >/dev/null 2>&1; then
+        findmnt -no SOURCE,FSTYPE,OPTIONS /
+    else
+        echo "findmnt is unavailable."
+    fi
+
+    echo
+    printf '%b\n' "${CYAN}BIOS / UEFI${NC}"
+
+    local bios_vendor
+    local bios_version
+    local bios_date
+
+    bios_vendor=$(
+        cat /sys/devices/virtual/dmi/id/bios_vendor 2>/dev/null
+    )
+
+    bios_version=$(
+        cat /sys/devices/virtual/dmi/id/bios_version 2>/dev/null
+    )
+
+    bios_date=$(
+        cat /sys/devices/virtual/dmi/id/bios_date 2>/dev/null
+    )
+
+    printf 'Vendor:  %s\n' "${bios_vendor:-Unknown}"
+    printf 'Version: %s\n' "${bios_version:-Unknown}"
+    printf 'Date:    %s\n' "${bios_date:-Unknown}"
+
+    echo
+    printf '%b\n' "${CYAN}FAILED SYSTEMD SERVICES${NC}"
+
+    local failed_services
+    failed_services=$(
+        systemctl --failed --no-legend 2>/dev/null
+    )
+
+    if [[ -n "$failed_services" ]]; then
+        printf '%s\n' "$failed_services"
+    else
+        echo "None"
+    fi
+
+    echo
+    printf '%b\n' "${CYAN}TOP MEMORY-CONSUMING PROCESSES${NC}"
+
+    ps \
+        -eo pid,user,comm,%cpu,%mem \
+        --sort=-%mem |
+        head -n 11
+fi
+
+echo
 }
 
 
