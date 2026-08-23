@@ -3,7 +3,7 @@
 # BASH Addins - the library of custom functions and aliases for enhanced BASH scripting and Terminal usage.
 # Started by Artto Aunap (https://github.com/arrrtto) in 2025 for personal use, but in 2025 decided to share with the GNU/Linux and FOSS community.
 
-BA_VERSION="1.12"
+BA_VERSION="1.2"
 BA_DESCRIPTION="Enhanced BASH scripting library"
 BA_AUTHOR="Artto Aunap"
 BA_LICENSE="MIT"
@@ -44,14 +44,14 @@ function install_dependencies() {
 
     echo "Updating package lists..."
     if ! sudo apt update -qq; then
-      echo "⚠️  Package-list update failed. I will use the existing package lists."
+      echo "⚠️ Package-list update failed. Will use the existing package lists."
     fi
     echo
 
     for pkg in "${packages[@]}"; do
       # Check if already installed
       if dpkg -s "$pkg" &>/dev/null; then
-        echo "✅ $pkg is already installed — skipping."
+        echo "✅ $pkg is already installed, skipping."
         already_installed+=("$pkg")
         continue
       fi
@@ -60,7 +60,7 @@ function install_dependencies() {
       # repositories. This is a normal skip, not an installer failure.
       if [[ -z $(apt-cache policy "$pkg" 2>/dev/null | awk '/Candidate:/ {print $2}') ]] ||
          [[ $(apt-cache policy "$pkg" 2>/dev/null | awk '/Candidate:/ {print $2}') == "(none)" ]]; then
-        echo "⏭️  $pkg is unavailable from the enabled repositories — skipping."
+        echo "⏭️ $pkg is unavailable from the enabled repositories, skipping."
         unavailable+=("$pkg")
         continue
       fi
@@ -158,11 +158,7 @@ mv "$OUTPUT_FILE" "$HOME/bin/" && echo "Moved the $OUTPUT_FILE to $HOME/bin/"
 function ba_versioncheck() {
 # Checks for a newer version of the BASH Addins library on GitHub.
 echo "Checking GitHub for a newer version..."
-BA_GITHUBVERSION=$(
-  curl -fsSL "https://raw.githubusercontent.com/arrrtto/bash.addins/main/installer" |
-    sed -nE 's/^BA_VERSION="([^"]+)".*/\1/p' |
-    head -n 1
-)
+BA_GITHUBVERSION=$(curl -fsSL "https://raw.githubusercontent.com/arrrtto/bash.addins/main/installer" | sed -nE 's/^BA_VERSION="([^"]+)".*/\1/p' | head -n 1)
 if [[ -z "$BA_GITHUBVERSION" ]]; then
   echo "❌ Could not retrieve the current version from GitHub."
   return 1
@@ -172,15 +168,6 @@ if [[ "$BA_VERSION" == "$BA_GITHUBVERSION" ]]; then
 echo "You have the same version that is on GitHub."
 elif [[ "$(printf '%s\n' "$BA_VERSION" "$BA_GITHUBVERSION" | sort -V | head -n 1)" == "$BA_VERSION" ]]; then
 echo "Newer version of the BASH addins library ($BA_GITHUBVERSION) available on GitHub."
-
-# ↓-- NEEDS TO BE MADE FUNCTIONAL AT SOME POINT --↓ #
-#echo "Do you want to install it now?"
-# -- The download and installation process should happen here:
-#cd /tmp && wget -q "https://github.com/arrrtto/bash.addins/archive/refs/tags/$BA_GITHUBVERSION.zip"
-#unzip $BA_GITHUBVERSION.zip && mv /tmp/bash.addins-$BA_GITHUBVERSION/bash.addins "$HOME/bin/bash.addins" && chmod +x "$HOME/bin/bash.addins"
-#cd -
-#echo "Downloaded, extracted and moved the newer version to $HOME/bin :)"
-# ↑-- NEEDS TO BE MADE FUNCTIONAL AT SOME POINT --↑ #
 else
 echo "Your local version ($BA_VERSION) is newer than the GitHub version ($BA_GITHUBVERSION)."
 fi
@@ -212,9 +199,7 @@ if [[ ${#modulefiles[@]} -eq 0 ]]; then
 fi
 
 for modulefile in "${modulefiles[@]}"; do
-  if ! curl -fsSL \
-    "https://raw.githubusercontent.com/arrrtto/bash.addins/main/modules/$modulefile" \
-    -o "$temp_dir/$modulefile"; then
+  if ! curl -fsSL "https://raw.githubusercontent.com/arrrtto/bash.addins/main/modules/$modulefile" -o "$temp_dir/$modulefile"; then
     echo "❌ Could not download module: $modulefile"
     rm -rf -- "$temp_dir"
     return 1
