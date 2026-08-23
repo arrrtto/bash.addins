@@ -2,13 +2,16 @@
 
 # General system module
 MODULE_NAME="system"
-MODULE_VERSION="1.09"
+MODULE_VERSION="1.2"
 MODULE_DESCRIPTION="System utilities, files and process management"
 
 
 function showallfunctions() {
 # Lists all the functions that the bash.addins contains.
-local file=$(which bash.addins)
+local file
+file="$(type -P bash.addins 2>/dev/null || true)"
+[[ -z "$file" ]] && file="$HOME/bin/bash.addins"
+[[ -r "$file" ]] || { echo "showallfunctions: bash.addins not found" >&2; return 1; }
 local RED='\033[0;31m'      # for function names
 local LIGHT_GRAY='\033[0;37m'  # for comments
 local NC='\033[0m'          # no Color
@@ -39,7 +42,9 @@ showallfunctions | grep -Ev "#" | sed_removeemptylines | wc -l
 
 function reload() {
 # Reloads the BASH Add-ins library file by executing: source bash.addins
-source bash.addins
+local file="${BASH_ADDINS_FILE:-$HOME/bin/bash.addins}"
+[[ -r "$file" ]] || { echo "reload: cannot read $file" >&2; return 1; }
+source "$file"
 }
 
 
@@ -53,29 +58,37 @@ while IFS= read -r file; do [[ -f "$file" ]] && echo "$file"; done
 function countdown_minutes() {
 # Counts down from a specified number of minutes, displaying the remaining time.
 # Example: countdown_minutes 5
-count=${1?No parameters given. Try countdown_minutes 5}
-(( ++count )) 
-while (( --count >= 0 )); do
+local count="${1:-}"
+if [[ ! "$count" =~ ^[0-9]+$ ]]; then
+  echo "Usage: countdown_minutes <non-negative whole minutes>" >&2
+  return 2
+fi
+while (( count > 0 )); do
 # using echo -ne and \r (carriage return) to overwrite the same line instead of printing a new one each time.
 # The extra spaces ("  ") at the end ensure the previous text is fully cleared when the number shrinks.
   echo -ne "\r$count minutes left to wait.  "
   sleep 60
+  ((count--))
 done
-echo ""  # Move to a new line after the loop finishes
+echo -e "\r0 minutes left to wait.  "
 }
 
 
 function randomnumber() {
 # Generates random number for you between your desired numbers, such as between 1 and 1500.
 # Example: randomnumber 5 250
-if [ -z "$1" ]; then
+if [[ $# -ne 2 || ! "$1" =~ ^-?[0-9]+$ || ! "$2" =~ ^-?[0-9]+$ ]]; then
 echo "Generates random number for you between your desired numbers, such as between 1 and 1500."
 echo "Example usage: randomnumber 5 250"
 return 1
 fi
-local min=$1
-local max=$2
-expr $min + $RANDOM % $max
+local min=$1 max=$2 range
+if (( min > max )); then
+  echo "randomnumber: minimum must not exceed maximum" >&2
+  return 1
+fi
+range=$((max - min + 1))
+echo $((min + RANDOM % range))
 }
 
 
@@ -161,6 +174,11 @@ function whatdate() {
         return 1
     fi
 
+    if (( ($# - 1) % 2 != 0 )); then
+        echo "Each number must be followed by a unit." >&2
+        return 1
+    fi
+
     # Get direction (last argument)
     direction=${@: -1}
 
@@ -179,6 +197,7 @@ function whatdate() {
     for ((i=0; i<${#args[@]}; i+=2)); do
         num=${args[i]}
         unit=${args[i+1]}
+        [[ "$num" =~ ^[0-9]+$ ]] || { echo "Invalid number '$num'."; return 1; }
         # Normalize plural/singular
         case "$unit" in
             hour|hours)   u="hour" ;;
@@ -278,12 +297,16 @@ function reminderd() {
         return 1
     fi
 
-    ntfytopic="$2"
+    local ntfytopic="$2"
     local file="${1:-$HOME/reminders.txt}"
     local sent_file="$HOME/reminderd.sent"
 
-    touch "$file"
-    touch "$sent_file"
+    [[ "$ntfytopic" =~ ^[A-Za-z0-9_-]+$ ]] || {
+        echo "Invalid ntfy topic. Use only letters, numbers, underscores and hyphens." >&2
+        return 2
+    }
+
+    touch "$file" "$sent_file" || return 1
 
     while true; do
         local now_date now_time now_day now_dom now_key
@@ -390,6 +413,7 @@ if [[ -f /tmp/eolapi.json ]]; then rm /tmp/eolapi.json; fi  # delete the json fi
 
 function freememory() {
 # Shows RAM memory information.
+local mem swap total_mem available_mem total_swap free_swap
 mem=$(free -h | grep Mem)
 swap=$(free -h | grep Swap)
 
@@ -414,7 +438,10 @@ df -h | grep "^/" | grep -Ev "boot" | awk '{print "Free space on", $1":", $4"B"}
 
 
 function battery_left() {
-echo "$(cat /sys/class/power_supply/BAT0/capacity)%"
+local bat
+bat=$(compgen -G '/sys/class/power_supply/BAT*/capacity' | head -n 1)
+[[ -r "$bat" ]] || { echo "battery_left: no battery found" >&2; return 1; }
+printf '%s%%\n' "$(<"$bat")"
 }
 
 
@@ -1053,6 +1080,7 @@ function process_check() {
 # Checks if a specified app (process) is running and outputs its status.
 # Example: process_check brave    ; outputs "'$process' is running."
 local process="$1"
+[[ -n "$process" ]] || { echo "Usage: process_check <exact-process-name>" >&2; return 2; }
 if pgrep -x "$process" > /dev/null; then
   echo "$process is running"
 else
@@ -1064,9 +1092,14 @@ fi
 function process_kill() {
 # Kills a specified process by name.
 # Example: process_kill chromium
-pid=$(pgrep -f $1) # Find the PID of the given process
-# Send a SIGTERM signal (graceful close)
-if [[ ! -z "$pid" ]]; then kill -SIGTERM "$pid"; fi
+local process="${1:-}"
+[[ -n "$process" ]] || { echo "Usage: process_kill <exact-process-name>" >&2; return 2; }
+# Match the executable name exactly, avoiding accidental termination of
+# unrelated commands whose arguments happen to contain the search text.
+if ! pkill -TERM -x "$process" 2>/dev/null; then
+  echo "process_kill: no process named '$process' was found" >&2
+  return 1
+fi
 }
 
 function kill_zombieprocesses_chromium(){
@@ -1121,7 +1154,14 @@ fi
 
 if [[ ! -f "$input_file" ]]; then echo "Error: file '$input_file' not found."; return 1; fi
 
+case "$action" in
+  copy|move) [[ -n "${1:-}" ]] || { echo "Error: $action requires a destination directory." >&2; return 2; } ;;
+  chmod) [[ -n "${1:-}" ]] || { echo "Error: chmod requires a mode." >&2; return 2; } ;;
+  exec) (( $# > 0 )) || { echo "Error: exec requires a command." >&2; return 2; } ;;
+esac
+
 while IFS= read -r file; do
+    [[ -z "$file" || "$file" == \#* ]] && continue
     case "$action" in
             echo)
                 echo "$file"
@@ -1182,12 +1222,16 @@ if [[ -z "$old_ext" || -z "$new_ext" ]]; then
 echo "Usage example: replace_extension jpg.txt txt"
 return 1
 fi
+local nullglob_was_set=0
+shopt -q nullglob && nullglob_was_set=1
 shopt -s nullglob  # avoid literal glob if no match
+local file base new_file
 for file in *."$old_ext"; do
 base="${file%.$old_ext}"
 new_file="${base}.${new_ext}"
 mv -- "$file" "$new_file"
 done
+(( nullglob_was_set )) || shopt -u nullglob
 }
 
 
@@ -1197,9 +1241,13 @@ function replace_spaces() {
 local folder=${1?No input given for the folder} # Check if the folder is empty
 if [ -z "$folder" ]; then return 0; fi  # Do nothing if no folder is provided
 folder="${folder%/}" # Normalize folder path by removing trailing slash if present. No need, but for perfection sake
-find "$folder/" -maxdepth 1 -type f -iname "*" | while IFS= read -r file; do
-if [[ "$file" =~ \  ]]; then new_name="${file// /_}"; mv "$file" "$new_name"; fi
-done
+local file new_name
+while IFS= read -r -d '' file; do
+  if [[ "$file" == *" "* ]]; then
+    new_name="${file// /_}"
+    mv --no-clobber -- "$file" "$new_name"
+  fi
+done < <(find "$folder/" -maxdepth 1 -type f -print0)
 }
 
 
@@ -1209,10 +1257,14 @@ function replace_nordic_chars() {
 local folder=${1?No input given for the folder} # Check if the folder is empty
 if [ -z "$folder" ]; then return 0; fi  # Do nothing if no folder is provided
 folder="${folder%/}" # Normalize folder path by removing trailing slash if present. No need, but for perfection sake
-find "$folder/" -maxdepth 1 -type f -iname "*" | while IFS= read -r file; do
-mv "$file" "$(echo "$file" | sed 's/ä/a/g; s/ü/u/g; s/õ/o/g; s/ö/o/g')"
-mv "$file" "$(echo "$file" | sed 's/Ä/A/g; s/Ü/U/g; s/Õ/O/g; s/Ö/O/g')"
-done
+local file new_name
+while IFS= read -r -d '' file; do
+  new_name="${file//ä/a}"; new_name="${new_name//ü/u}"
+  new_name="${new_name//õ/o}"; new_name="${new_name//ö/o}"
+  new_name="${new_name//Ä/A}"; new_name="${new_name//Ü/U}"
+  new_name="${new_name//Õ/O}"; new_name="${new_name//Ö/O}"
+  [[ "$file" == "$new_name" ]] || mv --no-clobber -- "$file" "$new_name"
+done < <(find "$folder/" -maxdepth 1 -type f -print0)
 }
 
 
@@ -1256,6 +1308,8 @@ function choicelist() {
 
     local mode="single"
     [[ "$1" == "multi" ]] && mode="multi"
+    local -a _choices
+    local i n
     mapfile -t _choices
     if (( ${#_choices[@]} == 0 )); then return 1; fi
     
@@ -1270,7 +1324,9 @@ function choicelist() {
 
     while true; do
         printf "%s" "$prompt" >&2
-        read _pick < /dev/tty
+        if ! IFS= read -r _pick < /dev/tty; then
+            return 2
+        fi
 
         # Cancel
         if [[ "$_pick" =~ ^(0|c|C|q|Q)$ ]]; then
@@ -1288,7 +1344,9 @@ function choicelist() {
             # Multi mode: allow "1 3 5" or "1,3,5"
             local ok=true
             # Normalize commas → spaces
-            local picks=$(printf "%s" "$_pick" | tr ',' ' ')
+            local picks
+            picks=$(printf "%s" "$_pick" | tr ',' ' ')
+            [[ -n "${picks//[[:space:]]/}" ]] || ok=false
 
             for n in $picks; do
                 if ! [[ "$n" =~ ^[0-9]+$ ]] || (( n < 1 || n > ${#_choices[@]} )); then
@@ -1362,8 +1420,10 @@ du -sh "$dir"/* 2>/dev/null | sort -hr
 function wait4download() {
 # Waits for a download to complete by checking for .crdownload files in the Downloads folder.
 # Example: wait4download
-DOWNLOAD_DIR="/home/$USER/Downloads"
-tempfile=$(find "$DOWNLOAD_DIR" -name "*.crdownload" | head -n 1)    # Find the file with .crdownload extension (assuming only one active download)
+local DOWNLOAD_DIR="${1:-$HOME/Downloads}"
+local tempfile finalfile
+[[ -d "$DOWNLOAD_DIR" ]] || { echo "Download directory not found: $DOWNLOAD_DIR" >&2; return 1; }
+tempfile=$(find "$DOWNLOAD_DIR" -type f -name "*.crdownload" -print -quit)    # Find the first active Chromium download
 if [ -n "$tempfile" ]; then    # Check if the download process has started (i.e., a .crdownload file exists)
   echo "Downloading... $tempfile"
 finalfile="${tempfile%.crdownload}"    # Extract the expected final file name (remove .crdownload)
@@ -1531,7 +1591,11 @@ local unchanged=0
 
 # --- Phase 1: Wait until file size is stable ---
 while true; do
-  local size=$(stat -c%s "$filepath" 2>/dev/null)
+  local size
+  size=$(stat -c%s "$filepath" 2>/dev/null) || {
+    echo "File disappeared while waiting: $filepath" >&2
+    return 1
+  }
   if [ "$size" -eq "$last_size" ]; then
     ((unchanged++))
   else
@@ -1559,9 +1623,15 @@ echo "File '$filepath' is ready."
 
 
 function wait4file_gone_ext() {
-    local ext="$2"
     local dir="${1:-$HOME/Downloads}"
-    while find "$dir" -type f -name "$2" -print -quit 2>/dev/null | grep -q .; do sleep 1; done
+    local pattern="${2:-}"
+    if [[ -z "$pattern" ]]; then
+      echo "Usage: wait4file_gone_ext <directory> <glob-pattern>" >&2
+      echo "Example: wait4file_gone_ext ~/Downloads '*.crdownload'" >&2
+      return 2
+    fi
+    [[ -d "$dir" ]] || { echo "Directory not found: $dir" >&2; return 1; }
+    while find "$dir" -type f -name "$pattern" -print -quit 2>/dev/null | grep -q .; do sleep 1; done
 }
 
 function wait4network() {
@@ -1594,7 +1664,7 @@ if [ -z "$mountpoint" ]; then
   return 1
 fi
 echo "Waiting for mount point '$mountpoint'..."
-while ! mount | grep -q "$mountpoint"; do sleep 2; done
+while ! mountpoint -q -- "$mountpoint"; do sleep 2; done
 echo "'$mountpoint' mounted."
 }
 
@@ -1608,7 +1678,7 @@ if [ -z "$mountpoint" ]; then
   return 1
 fi
 echo "Waiting for '$mountpoint' to unmount..."
-while mount | grep -q "$mountpoint"; do sleep 2; done
+while mountpoint -q -- "$mountpoint"; do sleep 2; done
 echo "'$mountpoint' unmounted."
 }
 
@@ -1659,6 +1729,11 @@ function wait4time() {
     if [[ ! "$target_time" =~ ^[0-9]{2}:[0-9]{2}$ ]]; then
         echo "Usage: wait4time HH:MM"
         echo "Example: wait4time 16:00"
+        return 1
+    fi
+    local hour="${target_time%:*}" minute="${target_time#*:}"
+    if (( 10#$hour > 23 || 10#$minute > 59 )); then
+        echo "Invalid time: $target_time" >&2
         return 1
     fi
 
@@ -1871,24 +1946,36 @@ EOF
 
         if [ "$state" = "on" ]; then
             sudo awk -v user="$user" '
+                function add_missing() {
+                    if (!autologin_enable_set) print "AutomaticLoginEnable=True"
+                    if (!autologin_user_set) print "AutomaticLogin=" user
+                }
                 BEGIN {
                     daemon_found=0
+                    in_daemon=0
                     autologin_enable_set=0
                     autologin_user_set=0
                 }
                 /^\[daemon\]/ {
                     daemon_found=1
+                    in_daemon=1
                     print
                     next
                 }
-                daemon_found && /^[[:space:]]*AutomaticLoginEnable[[:space:]]*=/ {
+                /^\[/ {
+                    if (in_daemon) add_missing()
+                    in_daemon=0
+                    print
+                    next
+                }
+                in_daemon && /^[[:space:]]*AutomaticLoginEnable[[:space:]]*=/ {
                     if (!autologin_enable_set) {
                         print "AutomaticLoginEnable=True"
                         autologin_enable_set=1
                     }
                     next
                 }
-                daemon_found && /^[[:space:]]*AutomaticLogin[[:space:]]*=/ {
+                in_daemon && /^[[:space:]]*AutomaticLogin[[:space:]]*=/ {
                     if (!autologin_user_set) {
                         print "AutomaticLogin=" user
                         autologin_user_set=1
@@ -1897,14 +1984,12 @@ EOF
                 }
                 { print }
                 END {
+                    if (in_daemon) add_missing()
                     if (!daemon_found) {
                         print ""
                         print "[daemon]"
                         print "AutomaticLoginEnable=True"
                         print "AutomaticLogin=" user
-                    } else {
-                        if (!autologin_enable_set) print "AutomaticLoginEnable=True"
-                        if (!autologin_user_set) print "AutomaticLogin=" user
                     }
                 }
             ' "$target" | sudo tee "${target}.tmp" >/dev/null && sudo mv "${target}.tmp" "$target" || return 1
@@ -1914,9 +1999,10 @@ EOF
             return 0
         else
             sudo awk '
-                /^\[daemon\]/ { print; next }
-                /^[[:space:]]*AutomaticLoginEnable[[:space:]]*=/ { next }
-                /^[[:space:]]*AutomaticLogin[[:space:]]*=/ { next }
+                /^\[daemon\]/ { in_daemon=1; print; next }
+                /^\[/ { in_daemon=0; print; next }
+                in_daemon && /^[[:space:]]*AutomaticLoginEnable[[:space:]]*=/ { next }
+                in_daemon && /^[[:space:]]*AutomaticLogin[[:space:]]*=/ { next }
                 { print }
             ' "$target" | sudo tee "${target}.tmp" >/dev/null && sudo mv "${target}.tmp" "$target" || return 1
 
@@ -1975,6 +2061,3 @@ EOF
     echo "Error: unsupported or unhandled display manager: $dm"
     return 1
 }
-
-
-
