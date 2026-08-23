@@ -7,8 +7,8 @@ BA_VERSION="1.12"
 BA_DESCRIPTION="Enhanced BASH scripting library"
 BA_AUTHOR="Artto Aunap"
 BA_LICENSE="MIT"
-BA_INSTALLERFILE="$(realpath "$0")"
-BA_INSTALLERFILE=$(echo "$BA_INSTALLERFILE" | awk -F'/' '{print $NF}')
+BA_INSTALLER_PATH="$(realpath "$0")"
+BA_INSTALLERFILE="${BA_INSTALLER_PATH##*/}"
 
 
 # ------------ SETUP FUNCTIONS ------------
@@ -39,17 +39,29 @@ function install_dependencies() {
     )
 
     local failed=()
-    local skipped=()
+    local already_installed=()
+    local unavailable=()
 
     echo "Updating package lists..."
-    sudo apt update -qq
+    if ! sudo apt update -qq; then
+      echo "⚠️  Package-list update failed. I will use the existing package lists."
+    fi
     echo
 
     for pkg in "${packages[@]}"; do
       # Check if already installed
       if dpkg -s "$pkg" &>/dev/null; then
         echo "✅ $pkg is already installed — skipping."
-        skipped+=("$pkg")
+        already_installed+=("$pkg")
+        continue
+      fi
+
+      # Do not ask apt to install a package that is absent from the enabled
+      # repositories. This is a normal skip, not an installer failure.
+      if [[ -z $(apt-cache policy "$pkg" 2>/dev/null | awk '/Candidate:/ {print $2}') ]] ||
+         [[ $(apt-cache policy "$pkg" 2>/dev/null | awk '/Candidate:/ {print $2}') == "(none)" ]]; then
+        echo "⏭️  $pkg is unavailable from the enabled repositories — skipping."
+        unavailable+=("$pkg")
         continue
       fi
 
@@ -72,14 +84,23 @@ function install_dependencies() {
       done
       echo
       echo "You may need to enable extra repositories or install these manually."
-    else
+    elif [[ ${#unavailable[@]} -eq 0 ]]; then
       echo "All software packages installed successfully!"
+    else
+      echo "All available software packages installed successfully."
     fi
 
     echo
-    if [[ ${#skipped[@]} -gt 0 ]]; then
-      echo "ℹ️  Skipped already installed packages:"
-      for pkg in "${skipped[@]}"; do
+    if [[ ${#unavailable[@]} -gt 0 ]]; then
+      echo "ℹ️  Skipped packages unavailable from the enabled repositories:"
+      for pkg in "${unavailable[@]}"; do
+        echo "   - $pkg"
+      done
+      echo
+    fi
+    if [[ ${#already_installed[@]} -gt 0 ]]; then
+      echo "ℹ️  Already installed packages:"
+      for pkg in "${already_installed[@]}"; do
         echo "   - $pkg"
       done
     fi
@@ -109,82 +130,120 @@ function ba_compile() {
 # Function for creating the final bash.addins file by adding in the necessary contents from the module files.
 OUTPUT_FILE="bash.addins"   # Define the output file name to be generated: bash.addins
 echo "#!/bin/bash" > "$OUTPUT_FILE"  # Create the bash.addins file and add shebang as the first line
-sed -n '1!{/^BA_VERSION=/q;p}' "$BA_INSTALLERFILE" >> "$OUTPUT_FILE"  # Add the contents from installer file from the second line to BA_VERSION line into the bash.addins file 
+sed -n '1!{/^BA_VERSION=/q;p}' "$BA_INSTALLER_PATH" >> "$OUTPUT_FILE"  # Add the contents from installer file from the second line to BA_VERSION line into the bash.addins file
 # Append the modules, starting with main, aliases and system, then add others dynamically
+for module_file in modules/main.sh modules/aliases.sh modules/system.sh; do
+  [[ -f "$module_file" ]] || { echo "Required module missing: $module_file"; return 1; }
+done
 append_module "modules/main.sh"
 append_module "modules/aliases.sh"
 append_module "modules/system.sh"
-for module_file in $(ls modules | grep -Ev "main|aliases|system"); do append_module "modules/$module_file"; done
+for module_file in modules/*.sh; do
+  case "$module_file" in
+    modules/main.sh|modules/aliases.sh|modules/system.sh) continue ;;
+  esac
+  append_module "$module_file"
+done
 chmod +x "$OUTPUT_FILE"  # Make bash.addins file executable
 echo "$OUTPUT_FILE file generated to the current folder."
 }
 
 
 function ba_tobin() {
-mkdir -p /home/$USER/bin  # Create the bin folder, if it does not exist, for putting the bash.addins file into it later on
-mv "$OUTPUT_FILE" "/home/$USER/bin/" && echo "Moved the $OUTPUT_FILE to /home/$USER/bin/"
+mkdir -p "$HOME/bin"  # Create the bin folder, if it does not exist, for putting the bash.addins file into it later on
+mv "$OUTPUT_FILE" "$HOME/bin/" && echo "Moved the $OUTPUT_FILE to $HOME/bin/"
 }
 
 
 function ba_versioncheck() {
 # Checks for a newer version of the BASH Addins library on GitHub.
-mkdir -p /tmp
 echo "Checking GitHub for a newer version..."
-curl -s "https://github.com/arrrtto/bash.addins/blob/main/installer" > /tmp/ba.ver
-BA_GITHUBVERSION=$(cat /tmp/ba.ver | grep -oP 'BA_VERSION=........' | grep -oP '\d+.\d+')
-rm /tmp/ba.ver
+BA_GITHUBVERSION=$(
+  curl -fsSL "https://raw.githubusercontent.com/arrrtto/bash.addins/main/installer" |
+    sed -nE 's/^BA_VERSION="([^"]+)".*/\1/p' |
+    head -n 1
+)
+if [[ -z "$BA_GITHUBVERSION" ]]; then
+  echo "❌ Could not retrieve the current version from GitHub."
+  return 1
+fi
 # Compare the versions as arithmetic values...
-if [[ "$(printf '%s\n' "$BA_VERSION" "$BA_GITHUBVERSION" | sort -V | head -n 1)" != "$BA_GITHUBVERSION" ]]; then
+if [[ "$BA_VERSION" == "$BA_GITHUBVERSION" ]]; then
+echo "You have the same version that is on GitHub."
+elif [[ "$(printf '%s\n' "$BA_VERSION" "$BA_GITHUBVERSION" | sort -V | head -n 1)" == "$BA_VERSION" ]]; then
 echo "Newer version of the BASH addins library ($BA_GITHUBVERSION) available on GitHub."
 
 # ↓-- NEEDS TO BE MADE FUNCTIONAL AT SOME POINT --↓ #
 #echo "Do you want to install it now?"
 # -- The download and installation process should happen here:
 #cd /tmp && wget -q "https://github.com/arrrtto/bash.addins/archive/refs/tags/$BA_GITHUBVERSION.zip"
-#unzip $BA_GITHUBVERSION.zip && mv /tmp/bash.addins-$BA_GITHUBVERSION/bash.addins /home/$USER/bin/bash.addins && chmod +x /home/$USER/bin/bash.addins
+#unzip $BA_GITHUBVERSION.zip && mv /tmp/bash.addins-$BA_GITHUBVERSION/bash.addins "$HOME/bin/bash.addins" && chmod +x "$HOME/bin/bash.addins"
 #cd -
-#echo "Downloaded, extracted and moved the newer version to /home/$USER/bin :)"
+#echo "Downloaded, extracted and moved the newer version to $HOME/bin :)"
 # ↑-- NEEDS TO BE MADE FUNCTIONAL AT SOME POINT --↑ #
-fi
-if [[ $BA_GITHUBVERSION == $BA_VERSION ]]; then
-echo "You have the same version that is on GitHub."
+else
+echo "Your local version ($BA_VERSION) is newer than the GitHub version ($BA_GITHUBVERSION)."
 fi
 }
 
 
 function download_modules() {
-if [[ ! -d ./modules ]]; then  # If modules folder does not exist, create it and download the module files
-echo "Downloading modules..."
-mkdir modules
-cd modules
-mkdir temp
-cd temp
-modulefileslist=$(curl -s "https://github.com/arrrtto/bash.addins/tree/main/modules" | grep -oP '\w+\.sh' | awk '!seen[$0]++')
-for modulefile in $modulefileslist; do wget -q https://raw.githubusercontent.com/arrrtto/bash.addins/main/modules/$modulefile; done
-mv *.sh ../
-cd ..
-rm temp
-cd ..
+local force_refresh="${1:-false}"
+local temp_dir modulefile
+local -a modulefiles
+
+if [[ -d ./modules && "$force_refresh" != "true" ]]; then
+  return 0
 fi
+
+echo "Downloading modules..."
+temp_dir=$(mktemp -d) || return 1
+
+# Use GitHub's API rather than scraping the rendered HTML page.
+mapfile -t modulefiles < <(
+  curl -fsSL "https://api.github.com/repos/arrrtto/bash.addins/contents/modules" |
+    sed -nE 's/.*"name": "([^"]+\.sh)".*/\1/p'
+)
+
+if [[ ${#modulefiles[@]} -eq 0 ]]; then
+  echo "❌ Could not obtain the module list from GitHub."
+  rm -rf -- "$temp_dir"
+  return 1
+fi
+
+for modulefile in "${modulefiles[@]}"; do
+  if ! curl -fsSL \
+    "https://raw.githubusercontent.com/arrrtto/bash.addins/main/modules/$modulefile" \
+    -o "$temp_dir/$modulefile"; then
+    echo "❌ Could not download module: $modulefile"
+    rm -rf -- "$temp_dir"
+    return 1
+  fi
+done
+
+# Only alter the installed module set after every download succeeded.
+mkdir -p ./modules || { rm -rf -- "$temp_dir"; return 1; }
+cp "$temp_dir"/*.sh ./modules/ || { rm -rf -- "$temp_dir"; return 1; }
+rm -rf -- "$temp_dir"
 }
 
 
 function ba_setup() {
 install_dependencies
-download_modules
-ba_compile
-ba_tobin
+download_modules || return 1
+ba_compile || return 1
+ba_tobin || return 1
 add_to_bashrc
-source bash.addins
+source "$HOME/bin/bash.addins" || return 1
 gradient_text "Setup complete! BASH Add-ins now in use. Enjoy!"
 }
 
 
 function ba_update() {
-download_modules
-ba_compile
-ba_tobin
-source bash.addins
+download_modules true || return 1
+ba_compile || return 1
+ba_tobin || return 1
+source "$HOME/bin/bash.addins" || return 1
 gradient_text "Update complete! Enjoy!"
 }
 
@@ -211,7 +270,3 @@ if [[ "$1" == "check" ]]; then ba_versioncheck; fi
 if [[ "$1" == "setup" ]]; then ba_setup; fi
 if [[ "$1" == "update" ]]; then ba_update; fi
 if [[ "$1" == "compile" ]]; then ba_compile; ba_tobin; fi
-
-
-
-
