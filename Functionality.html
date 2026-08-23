@@ -1,0 +1,2294 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark light">
+  <title>Functionality</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+
+    const themeName = "base";
+
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: themeName,
+      securityLevel: "loose",
+      flowchart: {
+        curve: "basis",
+        htmlLabels: true,
+        nodeSpacing: 80,
+        rankSpacing: 95,
+        wrappingWidth: 190
+      },
+      sequence: {
+        mirrorActors: false,
+        rightAngles: false,
+        showSequenceNumbers: false
+      },
+      themeVariables: {
+        background: "transparent",
+        primaryColor: "rgba(49,198,231,0.16)",
+        primaryTextColor: "#f8fbff",
+        primaryBorderColor: "rgba(49,198,231,0.72)",
+        lineColor: "rgba(169,200,255,0.78)",
+        secondaryColor: "rgba(204,74,168,0.16)",
+        tertiaryColor: "rgba(255,255,255,0.08)",
+        fontFamily: "Montserrat, Segoe UI, Arial, sans-serif",
+        fontSize: "17px"
+      }
+    });
+
+    function normalizeMermaidBlocks() {
+      document.querySelectorAll('pre code.language-mermaid, pre.mermaid code, code.mermaid').forEach((code) => {
+        const pre = code.closest('pre') || code;
+        const source = code.textContent;
+        pre.className = 'mermaid';
+        pre.removeAttribute('style');
+        pre.textContent = source;
+      });
+
+      document.querySelectorAll('pre.mermaid').forEach((block, i) => {
+        if (!block.parentElement.classList.contains('mermaid-card')) {
+          const shell = document.createElement('section');
+          shell.className = 'mermaid-card';
+          const title = document.createElement('div');
+          title.className = 'mermaid-label';
+          title.textContent = 'Diagram ' + (i + 1);
+          block.parentNode.insertBefore(shell, block);
+          shell.appendChild(title);
+          shell.appendChild(block);
+        }
+      });
+    }
+
+    function enhanceMermaidSvgs() {
+      document.querySelectorAll('.mermaid svg').forEach((svg) => {
+        svg.classList.add('glass-mermaid');
+        svg.removeAttribute('height');
+        svg.style.maxWidth = '100%';
+        svg.style.height = 'auto';
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      normalizeMermaidBlocks();
+      await mermaid.run({ querySelector: '.mermaid' });
+      enhanceMermaidSvgs();
+
+      const stored = localStorage.getItem('md2html-theme');
+      if (stored) document.documentElement.setAttribute('data-theme', stored);
+
+      document.querySelectorAll('[data-theme-button]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const theme = btn.getAttribute('data-theme-button');
+          document.documentElement.setAttribute('data-theme', theme);
+          localStorage.setItem('md2html-theme', theme);
+        });
+      });
+    });
+  </script>
+  <style>
+    :root {
+      --bg: #0a1020;
+      --bg-2: #11182b;
+      --surface: rgba(16, 24, 43, 0.82);
+      --surface-2: rgba(24, 34, 58, 0.82);
+      --surface-3: rgba(255,255,255,0.055);
+      --text: #edf3ff;
+      --muted: #a9b6cf;
+      --line: rgba(169, 200, 255, 0.20);
+      --accent: #31c6e7;
+      --accent-2: #cc4aa8;
+      --accent-3: #a9c8ff;
+      --link: #8fb8ff;
+      --good: #7ee7c5;
+      --code-bg: rgba(4, 8, 18, 0.70);
+      --quote-bg: rgba(49, 198, 231, 0.08);
+      --shadow: 0 24px 80px rgba(0,0,0,.35);
+      --radius: 24px;
+      --content-width: 1120px;
+      --font-body: Montserrat, Segoe UI, Arial, sans-serif;
+      --font-mono: "JetBrains Mono", "Fira Code", monospace;
+      --transition: 220ms ease;
+    }
+
+    html[data-theme="light"] {
+      --bg: #eef5ff;
+      --bg-2: #ffffff;
+      --surface: rgba(255,255,255,.88);
+      --surface-2: rgba(247,250,255,.92);
+      --surface-3: rgba(15, 99, 231, 0.055);
+      --text: #162238;
+      --muted: #637087;
+      --line: rgba(15, 99, 231, 0.16);
+      --accent: #087ea4;
+      --accent-2: #b4238a;
+      --accent-3: #295fbd;
+      --link: #0c63e7;
+      --code-bg: rgba(240,244,252,.95);
+      --quote-bg: rgba(8,126,164,0.07);
+      --shadow: 0 24px 70px rgba(24, 51, 91, .14);
+    }
+
+    html[data-theme="dim"] {
+      --bg: #1b1f2a;
+      --bg-2: #262b38;
+      --surface: rgba(34, 39, 52, 0.86);
+      --surface-2: rgba(42, 48, 64, 0.86);
+      --surface-3: rgba(255,255,255,.05);
+      --text: #e4e9f4;
+      --muted: #aeb7c7;
+      --line: rgba(220,230,255,.18);
+      --accent: #8bd6f4;
+      --accent-2: #dc7ac3;
+      --accent-3: #b8ccff;
+      --link: #a5c9ff;
+      --code-bg: rgba(24, 28, 38, .88);
+      --quote-bg: rgba(139,214,244,.08);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--font-body);
+      color: var(--text);
+      background:
+        radial-gradient(circle at 12% 10%, rgba(49,198,231,.26), transparent 32%),
+        radial-gradient(circle at 84% 12%, rgba(204,74,168,.24), transparent 34%),
+        radial-gradient(circle at 55% 94%, rgba(169,200,255,.20), transparent 36%),
+        linear-gradient(135deg, var(--bg), var(--bg-2));
+      overflow-x: hidden;
+      transition: background var(--transition), color var(--transition);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: .28;
+      background-image:
+        linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px);
+      background-size: 42px 42px;
+      mask-image: linear-gradient(to bottom, black, transparent 82%);
+    }
+
+    a { color: var(--link); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--link), transparent 58%); }
+    a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      backdrop-filter: blur(20px);
+      background: color-mix(in srgb, var(--bg), transparent 20%);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .topbar-inner {
+      width: min(var(--content-width), calc(100vw - 32px));
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 0;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 600;
+      letter-spacing: -.02em;
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    .brand-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      box-shadow: 0 0 24px color-mix(in srgb, var(--accent), transparent 35%);
+    }
+
+    .theme-switcher {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .theme-switcher button {
+      border: 1px solid var(--line);
+      background: var(--surface-3);
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 7px 11px;
+      font: 700 12px var(--font-body);
+      cursor: pointer;
+    }
+
+    .theme-switcher button:hover { color: var(--text); border-color: var(--accent); }
+
+    .page {
+      position: relative;
+      width: min(var(--content-width), calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 54px 0 80px;
+    }
+
+    .hero {
+      position: relative;
+      margin: 0 0 32px;
+      padding: clamp(30px, 6vw, 62px);
+      border: 1px solid var(--line);
+      border-radius: calc(var(--radius) + 8px);
+      background:
+        linear-gradient(135deg, rgba(49,198,231,.15), rgba(204,74,168,.12)),
+        var(--surface);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: -1px;
+      pointer-events: none;
+      background: linear-gradient(120deg, transparent, rgba(255,255,255,.16), transparent);
+      transform: translateX(-110%);
+      animation: sheen 12s linear infinite;
+    }
+
+    @keyframes sheen { to { transform: translateX(110%); } }
+
+    .kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 18px;
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--accent-3);
+      background: var(--surface-3);
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .12em;
+    }
+
+    .hero h1 {
+      max-width: 950px;
+      margin: 0;
+      font-size: clamp(2.2rem, 7vw, 5.8rem);
+      line-height: .94;
+      letter-spacing: -.07em;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .hero-line {
+      width: 170px;
+      height: 5px;
+      margin-top: 24px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      box-shadow: 0 0 26px color-mix(in srgb, var(--accent), transparent 45%);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 280px;
+      gap: 26px;
+      align-items: start;
+    }
+
+    .content {
+      min-width: 0;
+      padding: clamp(24px, 4vw, 48px);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    nav#TOC {
+      position: sticky;
+      top: 72px;
+      max-height: calc(100vh - 100px);
+      overflow: auto;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: 0 18px 50px rgba(0,0,0,.18);
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    nav#TOC::before {
+      content: "Contents";
+      display: block;
+      margin-bottom: 12px;
+      font-weight: 800;
+      color: var(--accent);
+      letter-spacing: -.02em;
+    }
+
+    nav#TOC ul { list-style: none; margin: 0; padding-left: 0; }
+    nav#TOC li { margin: 8px 0; padding-left: 0; font-size: 13px; line-height: 1.35; }
+    nav#TOC ul ul { padding-left: 13px; margin-top: 8px; border-left: 1px solid var(--line); }
+    nav#TOC a { color: var(--muted); border-bottom: 0; }
+    nav#TOC a:hover { color: var(--accent); }
+
+    .content > nav#TOC { display: none; }
+
+    h1, h2, h3, h4, h5, h6 {
+      color: var(--text);
+      letter-spacing: -.035em;
+      line-height: 1.14;
+      margin: 1.5em 0 .65em;
+      font-weight: 800;
+    }
+
+    .content > *:first-child { margin-top: 0; }
+
+    .content h1 {
+      font-size: clamp(1.5rem, 3vw, 2rem);
+      margin-top: .1em;
+      margin-bottom: .7em;
+      line-height: 1.08;
+      letter-spacing: -.03em;
+      font-weight: 700;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2), var(--accent-3));
+      background-size: 200% 200%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      animation: headingShift 10s ease-in-out infinite;
+    }
+
+    @keyframes headingShift {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+    h2 {
+      font-size: clamp(1.7rem, 4vw, 3.0rem);
+      padding-top: .25em;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    h3 { font-size: clamp(1.28rem, 3vw, 2.0rem); color: var(--accent-3); }
+    h4 { font-size: 1.15rem; color: var(--accent); }
+
+    p, li {
+      color: var(--text);
+      font-size: 17px;
+      line-height: 1.72;
+    }
+
+    p { margin: 0 0 1.15em; }
+    ul, ol { margin: .7em 0 1.5em; padding-left: 1.4em; }
+    li { margin: .42em 0; }
+    strong { color: var(--accent-3); font-weight: 800; }
+    em { color: color-mix(in srgb, var(--accent-2), var(--text) 45%); }
+
+    blockquote {
+      margin: 1.5em 0;
+      padding: 18px 22px;
+      border-left: 4px solid var(--accent);
+      border-radius: 0 18px 18px 0;
+      background: var(--quote-bg);
+      color: var(--text);
+    }
+
+    hr {
+      border: 0;
+      height: 1px;
+      margin: 36px 0;
+      background: linear-gradient(90deg, transparent, var(--line), transparent);
+    }
+
+    table {
+      display: block;
+      width: 100%;
+      overflow-x: auto;
+      margin: 1.5em 0 2em;
+      border-collapse: collapse;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--surface-2);
+      box-shadow: 0 12px 36px rgba(0,0,0,.15);
+    }
+
+    thead { background: rgba(49,198,231,.10); }
+    th, td {
+      padding: 13px 15px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+    th { color: var(--accent-3); font-weight: 600; }
+    td { color: var(--text); }
+    tr:last-child td { border-bottom: 0; }
+
+    code {
+      font-family: var(--font-mono);
+      font-size: .88em;
+      color: var(--good);
+      background: var(--code-bg);
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: .12em .38em;
+    }
+
+    pre {
+      position: relative;
+      overflow: auto;
+      margin: 1.5em 0;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--code-bg);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+    }
+
+    pre code {
+      display: block;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: #dce8ff;
+      font-size: 14px;
+      line-height: 1.6;
+      white-space: pre;
+    }
+
+    .mermaid-card {
+      position: relative;
+      margin: 2.2em 0;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      background:
+        linear-gradient(135deg, rgba(49,198,231,.12), rgba(204,74,168,.10)),
+        var(--surface-2);
+      box-shadow: 0 24px 70px rgba(0,0,0,.25);
+      overflow: hidden;
+    }
+
+    .mermaid-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(circle at 20% 0%, rgba(255,255,255,.16), transparent 35%);
+    }
+
+    .mermaid-label {
+      position: relative;
+      z-index: 1;
+      display: inline-flex;
+      margin-bottom: 14px;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--accent-3);
+      background: var(--surface-3);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    pre.mermaid {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      justify-content: center;
+      min-height: 80px;
+      margin: 0;
+      padding: 22px;
+      border: 1px solid color-mix(in srgb, var(--line), transparent 15%);
+      border-radius: 20px;
+      background: rgba(0,0,0,.16);
+      color: var(--text);
+      white-space: pre-wrap;
+    }
+
+    .glass-mermaid {
+      filter: drop-shadow(0 16px 28px rgba(0,0,0,.25));
+    }
+
+    img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 18px;
+      box-shadow: 0 18px 50px rgba(0,0,0,.2);
+    }
+
+    .footnote, .footnotes { color: var(--muted); font-size: 14px; }
+
+    @media (max-width: 980px) {
+      .layout { grid-template-columns: 1fr; }
+      nav#TOC { position: relative; top: auto; order: -1; max-height: none; }
+      .topbar-inner { align-items: flex-start; flex-direction: column; }
+      .theme-switcher { justify-content: flex-start; }
+    }
+
+    @media (max-width: 640px) {
+      .page { width: min(100vw - 20px, var(--content-width)); padding-top: 28px; }
+      .hero { padding: 28px 22px; }
+      .content { padding: 22px 18px; }
+      p, li { font-size: 16px; }
+      .mermaid-card { padding: 14px; border-radius: 20px; }
+      pre.mermaid { justify-content: flex-start; overflow-x: auto; padding: 14px; }
+      th, td { padding: 11px 12px; }
+    }
+
+    @media print {
+      .topbar, nav#TOC, .theme-switcher { display: none !important; }
+      body { background: #fff; color: #000; }
+      .page { width: auto; padding: 0; }
+      .hero, .content, .mermaid-card { box-shadow: none; border-color: #ddd; }
+      h2 { color: #000; -webkit-text-fill-color: #000; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+
+      <div class="theme-switcher" aria-label="Theme switcher">
+        <button type="button" data-theme-button="dark">Dark</button>
+        <button type="button" data-theme-button="dim">Dim</button>
+        <button type="button" data-theme-button="light">Light</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="layout">
+      <article class="content">
+<h1 id="bash-addins-functionality-guide">BASH Addins Functionality
+Guide</h1>
+<p>This guide explains every user-facing alias and function included in
+BASH Addins. It is written for ordinary GNU/Linux home users: you can
+copy the examples, replace the sample names with your own, and run them
+in Terminal.</p>
+<blockquote>
+<p>[!IMPORTANT]<br />
+BASH Addins is currently designed mainly for Debian, Ubuntu, Linux Mint
+and LMDE. Graphical window commands generally require an X11/Xorg
+session; some do not work under Wayland.</p>
+</blockquote>
+<h2 id="contents">Contents</h2>
+<ul>
+<li><a href="#how-to-use-bash-addins">How to use BASH Addins</a></li>
+<li><a href="#main-commands">Main commands</a></li>
+<li><a href="#aliases-and-everyday-shortcuts">Aliases and everyday
+shortcuts</a></li>
+<li><a href="#system-files-and-processes">System, files and
+processes</a></li>
+<li><a href="#text-and-number-processing">Text and number
+processing</a></li>
+<li><a href="#media-and-documents">Media and documents</a></li>
+<li><a href="#gui-and-window-management">GUI and window
+management</a></li>
+<li><a href="#fancy-terminal-output">Fancy Terminal output</a></li>
+<li><a href="#rss-feeds">RSS feeds</a></li>
+<li><a href="#cryptocurrency">Cryptocurrency</a></li>
+<li><a href="#dependencies">Dependencies</a></li>
+</ul>
+<h2 id="how-to-use-bash-addins">How to use BASH Addins</h2>
+<p>After installation, open a new Terminal. Functions behave like
+ordinary commands:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">systeminfo</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">battery_left</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="ex">foldersize</span> ~/Downloads</span></code></pre></div>
+<h3 id="piping-text-into-another-command">Piping text into another
+command</h3>
+<p>Many text functions read from standard input. The pipe character
+<code>|</code> sends the output of the command on its left into the
+command on its right:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="bu">echo</span> <span class="st">&quot;Contact me at hello@example.com&quot;</span> <span class="kw">|</span> <span class="ex">regex_email</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span> shopping-list.txt <span class="kw">|</span> <span class="ex">sed_removeemptylines</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> <a href="https://example.com">https://example.com</a> <span class="kw">|</span> <span class="ex">regex_links_https</span></span></code></pre></div>
+<p>Functions can be chained:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span> prices.txt <span class="kw">|</span> <span class="ex">sed_comma2dot</span> <span class="kw">|</span> <span class="ex">regex_awk_sum</span></span></code></pre></div>
+<h3 id="filenames-containing-spaces">Filenames containing spaces</h3>
+<p>Put filenames and paths inside quotation marks:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">to_mp3</span> <span class="st">&quot;My recording.wav&quot;</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="ex">foldersize</span> <span class="st">&quot;My Videos&quot;</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="ex">pdf_rotate_clockwise</span> <span class="st">&quot;Important document.pdf&quot;</span></span></code></pre></div>
+<h3 id="safety-labels-used-below">Safety labels used below</h3>
+<ul>
+<li><strong>Changes files</strong> means the command creates, moves,
+renames or replaces files.</li>
+<li><strong>Destructive</strong> means data may be deleted or
+permanently lost.</li>
+<li><strong>Runs continuously</strong> means press <code>Ctrl+C</code>
+to stop it.</li>
+<li><strong>Needs sudo</strong> means it may ask for your administrator
+password.</li>
+</ul>
+<h2 id="main-commands">Main commands</h2>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Command</th>
+<th>What it does</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>showallfunctions</code></td>
+<td>Lists installed BASH Addins functions and their short
+descriptions.</td>
+<td><code>showallfunctions</code></td>
+</tr>
+<tr class="even">
+<td><code>showaliases</code></td>
+<td>Lists the aliases built into the compiled library.</td>
+<td><code>showaliases</code></td>
+</tr>
+<tr class="odd">
+<td><code>functions_amount</code></td>
+<td>Counts the available functions.</td>
+<td><code>functions_amount</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="aliases-and-everyday-shortcuts">Aliases and everyday
+shortcuts</h2>
+<p>Aliases are short alternative command names. Some deliberately use
+general names such as <code>update</code>, <code>setup</code> and
+<code>mkdir</code>; remember that these names behave differently after
+BASH Addins is loaded.</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Alias</th>
+<th>Meaning</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>cls</code></td>
+<td>Clears the Terminal screen.</td>
+<td><code>cls</code></td>
+</tr>
+<tr class="even">
+<td><code>cleanup</code></td>
+<td>Rotates old system logs, retains seven days, cleans APT packages and
+offers to remove unused packages. <strong>Needs sudo.</strong></td>
+<td><code>cleanup</code></td>
+</tr>
+<tr class="odd">
+<td><code>distro</code></td>
+<td>Shows information about the installed Linux distribution.</td>
+<td><code>distro</code></td>
+</tr>
+<tr class="even">
+<td><code>grep</code></td>
+<td>Runs <code>grep</code> with automatic colored matches.</td>
+<td><code>grep error logfile.txt</code></td>
+</tr>
+<tr class="odd">
+<td><code>installdeb</code></td>
+<td>Installs a local Debian package with <code>dpkg</code>.
+<strong>Needs sudo.</strong></td>
+<td><code>installdeb program.deb</code></td>
+</tr>
+<tr class="even">
+<td><code>ipaddress_public</code></td>
+<td>Asks ipinfo.io for your internet-facing public IP address.</td>
+<td><code>ipaddress_public</code></td>
+</tr>
+<tr class="odd">
+<td><code>fixupdate</code></td>
+<td>Asks APT to repair missing or broken dependencies. <strong>Needs
+sudo.</strong></td>
+<td><code>fixupdate</code></td>
+</tr>
+<tr class="even">
+<td><code>l</code></td>
+<td>Compact directory listing with file-type indicators.</td>
+<td><code>l</code></td>
+</tr>
+<tr class="odd">
+<td><code>la</code></td>
+<td>Lists entries including hidden ones, except <code>.</code> and
+<code>..</code>.</td>
+<td><code>la</code></td>
+</tr>
+<tr class="even">
+<td><code>ll</code></td>
+<td>Detailed listing including hidden entries.</td>
+<td><code>ll</code></td>
+</tr>
+<tr class="odd">
+<td><code>lsdir</code> / <code>lsfolders</code></td>
+<td>Lists only immediate folders, alphabetically.</td>
+<td><code>lsfolders</code></td>
+</tr>
+<tr class="even">
+<td><code>lsfiles</code></td>
+<td>Lists only immediate files, alphabetically.</td>
+<td><code>lsfiles</code></td>
+</tr>
+<tr class="odd">
+<td><code>mkdir</code></td>
+<td>Always runs <code>mkdir -p</code>, creating parent folders and not
+complaining if the folder exists.</td>
+<td><code>mkdir Projects/Photos</code></td>
+</tr>
+<tr class="even">
+<td><code>setup</code></td>
+<td>Another name for <code>sudo dpkg -i</code>.</td>
+<td><code>setup program.deb</code></td>
+</tr>
+<tr class="odd">
+<td><code>uninstall</code></td>
+<td>Removes an installed Debian package while generally retaining
+configuration.</td>
+<td><code>uninstall package-name</code></td>
+</tr>
+<tr class="even">
+<td><code>uninstall_totally</code></td>
+<td>Purges a Debian package and its system configuration.</td>
+<td><code>uninstall_totally package-name</code></td>
+</tr>
+<tr class="odd">
+<td><code>update</code></td>
+<td>Updates APT indexes and installs available upgrades automatically.
+<strong>Needs sudo.</strong></td>
+<td><code>update</code></td>
+</tr>
+<tr class="even">
+<td><code>week</code></td>
+<td>Shows the current ISO week number.</td>
+<td><code>week</code></td>
+</tr>
+<tr class="odd">
+<td><code>datetime</code></td>
+<td>Prints a filename-friendly date and time.</td>
+<td><code>datetime</code></td>
+</tr>
+</tbody>
+</table>
+<p>These argument-aware helpers live in the aliases module but are
+functions:</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>What it does</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>ipaddress_local</code></td>
+<td>Shows the computer’s currently detected local-network IP
+addresses.</td>
+<td><code>ipaddress_local</code></td>
+</tr>
+<tr class="even">
+<td><code>findfile</code></td>
+<td>Recursively finds file or folder names containing literal text,
+case-insensitively.</td>
+<td><code>findfile invoice</code></td>
+</tr>
+<tr class="odd">
+<td><code>findtext_insidefiles</code></td>
+<td>Recursively searches file contents for literal text and skips
+<code>.git</code>.</td>
+<td><code>findtext_insidefiles "customer number"</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="system-files-and-processes">System, files and processes</h2>
+<h3 id="general-helpers-and-numbers">General helpers and numbers</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>What it does</th>
+<th>Example or use case</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>reload</code></td>
+<td>Reloads <code>~/bin/bash.addins</code> in the current shell after an
+update.</td>
+<td><code>reload</code></td>
+</tr>
+<tr class="even">
+<td><code>all</code></td>
+<td>Filters piped names so only regular files in the current directory
+remain.</td>
+<td><code>printf '%s\n' * | all</code></td>
+</tr>
+<tr class="odd">
+<td><code>countdown_minutes</code></td>
+<td>Displays a minute-by-minute countdown.</td>
+<td><code>countdown_minutes 5</code></td>
+</tr>
+<tr class="even">
+<td><code>randomnumber</code></td>
+<td>Prints an integer between the inclusive minimum and maximum.</td>
+<td><code>randomnumber 5 250</code></td>
+</tr>
+<tr class="odd">
+<td><code>sleeprandom</code></td>
+<td>Waits a random zero to nine seconds; useful between automation
+actions.</td>
+<td><code>sleeprandom</code></td>
+</tr>
+<tr class="even">
+<td><code>is_number</code></td>
+<td>Returns success when its argument is a supported non-negative
+decimal number. Mainly used by other functions.</td>
+<td><code>if is_number 12.5; then echo valid; fi</code></td>
+</tr>
+<tr class="odd">
+<td><code>diffnum</code></td>
+<td>Subtracts the second decimal number from the first, with eight
+decimal places.</td>
+<td><code>diffnum 5 3.24</code> → <code>1.76000000</code></td>
+</tr>
+<tr class="even">
+<td><code>numgt</code></td>
+<td>Tests whether number 1 is greater than number 2.</td>
+<td><code>if numgt 2.2 0.1; then echo greater; fi</code></td>
+</tr>
+<tr class="odd">
+<td><code>numge</code></td>
+<td>Tests greater-than-or-equal.</td>
+<td><code>if numge 5 5; then echo yes; fi</code></td>
+</tr>
+<tr class="even">
+<td><code>numlt</code></td>
+<td>Tests less-than.</td>
+<td><code>if numlt 0.01 1; then echo yes; fi</code></td>
+</tr>
+<tr class="odd">
+<td><code>numle</code></td>
+<td>Tests less-than-or-equal.</td>
+<td><code>if numle 1 1; then echo yes; fi</code></td>
+</tr>
+<tr class="even">
+<td><code>whatnext</code></td>
+<td>Asks whether to continue. Choosing No exits the current script or
+shell.</td>
+<td><code>whatnext</code></td>
+</tr>
+<tr class="odd">
+<td><code>whatdate</code></td>
+<td>Calculates a date in the past or future using GNU
+<code>date</code>.</td>
+<td><code>whatdate 2 months 3 days ago</code></td>
+</tr>
+<tr class="even">
+<td><code>datetimenow</code></td>
+<td>Prints <code>DD.MM.YYYY_HH.MM</code>.</td>
+<td><code>datetimenow</code></td>
+</tr>
+<tr class="odd">
+<td><code>timer</code></td>
+<td>Waits until a date/time and then prints
+<code>Timer finished</code>.</td>
+<td><code>timer tomorrow 20:00</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="reminders">Reminders</h3>
+<p><code>reminderd</code> watches a text file and sends matching
+reminders through an ntfy topic. It <strong>runs
+continuously</strong>.</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">reminderd</span> <span class="st">&quot;</span><span class="va">$HOME</span><span class="st">/reminders.txt&quot;</span> my-private-topic</span></code></pre></div>
+<p>Example <code>reminders.txt</code>:</p>
+<pre class="text"><code># One specific date
+ONCE 23.06.2027 08:00|Car repair
+
+# Every day
+DAILY 08:00|Take vitamins
+
+# Every Monday
+WEEKLY Mon 09:00|Weekly planning
+
+# First day of every month
+MONTHLY 1 10:00|Pay bills</code></pre>
+<p>Run it in the background:</p>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">nohup</span> bash <span class="at">-c</span> <span class="st">&#39;source ~/.bashrc; reminderd &quot;$HOME/reminders.txt&quot; my-private-topic&#39;</span> <span class="dt">\</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="op">&gt;</span><span class="st">&quot;</span><span class="va">$HOME</span><span class="st">/reminderd.log&quot;</span> <span class="dv">2</span><span class="op">&gt;&amp;</span><span class="dv">1</span> <span class="kw">&amp;</span></span></code></pre></div>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>reminderd</code></td>
+<td>Stores sent-reminder keys in <code>~/reminderd.sent</code>, avoiding
+repeated delivery during the matching minute. Requires
+<code>curl</code>, internet access and an ntfy topic.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="system-information-power-and-disks">System information, power
+and disks</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>What it does</th>
+<th>Example or warning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>systeminfo</code></td>
+<td>Shows OS, kernel, uptime, hostname, CPU, memory and disk
+information; Linux Mint support dates are retrieved online when
+available.</td>
+<td><code>systeminfo</code></td>
+</tr>
+<tr class="even">
+<td><code>freememory</code></td>
+<td>Shows available and total RAM and swap.</td>
+<td><code>freememory</code></td>
+</tr>
+<tr class="odd">
+<td><code>freespace</code></td>
+<td>Shows free space on mounted local filesystems.</td>
+<td><code>freespace</code></td>
+</tr>
+<tr class="even">
+<td><code>battery_left</code></td>
+<td>Shows the first detected laptop battery percentage.</td>
+<td><code>battery_left</code></td>
+</tr>
+<tr class="odd">
+<td><code>battery_ntfy_watch</code></td>
+<td>Watches battery charge and sends cooldown-controlled ntfy warnings
+while discharging. <strong>Runs continuously.</strong></td>
+<td><code>battery_ntfy_watch mytopic 15 30</code></td>
+</tr>
+<tr class="even">
+<td><code>nvmehealth</code></td>
+<td>Reads NVMe SMART data and warns about heat, wear and errors.
+Requires <code>nvme-cli</code> and sudo.</td>
+<td><code>nvmehealth /dev/nvme0n1</code></td>
+</tr>
+<tr class="odd">
+<td><code>diskhealth</code></td>
+<td>Uses <code>nvmehealth</code> for NVMe or <code>smartctl</code> for
+SATA/SAS disks. Requires sudo.</td>
+<td><code>diskhealth /dev/sda</code></td>
+</tr>
+</tbody>
+</table>
+<p>SMART warnings should be investigated; they do not automatically
+prove that a drive will fail immediately. Keep backups of important
+files regardless of SMART status.</p>
+<h3 id="ram-drive">RAM drive</h3>
+<p><code>ramdrive</code> creates a very fast temporary filesystem in RAM
+at <code>/mnt/ramdrive</code>. Its contents disappear after unmounting,
+power loss or reboot.</p>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Create and mount a temporary 4 GB RAM drive</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="ex">ramdrive</span> create 4GB</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Create one that is automatically mounted after boot</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="ex">ramdrive</span> create 4.5GB permanent</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="ex">ramdrive</span> mount</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="ex">ramdrive</span> unmount</span></code></pre></div>
+<p>The function validates the size, checks currently available memory,
+reserves at least 1 GiB or 10% of RAM for the system, uses restrictive
+mount options, backs up <code>/etc/fstab</code> before a permanent
+change, and asks before discarding mounted contents.</p>
+<blockquote>
+<p>[!WARNING]<br />
+Unmounting a RAM drive permanently destroys everything stored in it.
+Copy wanted files elsewhere first.</p>
+</blockquote>
+<h3 id="processes-and-file-management">Processes and file
+management</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>What it does</th>
+<th>Example or warning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>process_check</code></td>
+<td>Reports whether an exact process name is running.</td>
+<td><code>process_check firefox</code></td>
+</tr>
+<tr class="even">
+<td><code>process_kill</code></td>
+<td>Sends a graceful <code>SIGTERM</code> to processes with an exact
+executable name.</td>
+<td><code>process_kill chromium</code></td>
+</tr>
+<tr class="odd">
+<td><code>kill_zombieprocesses_chromium</code></td>
+<td>Force-kills parents of Chromium zombie processes. Use only when
+Chromium is stuck.</td>
+<td><code>kill_zombieprocesses_chromium</code></td>
+</tr>
+<tr class="even">
+<td><code>bigfiles</code></td>
+<td>Recursively lists files larger than a chosen size, largest
+first.</td>
+<td><code>bigfiles +500M</code></td>
+</tr>
+<tr class="odd">
+<td><code>list</code></td>
+<td>Performs one action for every path written in a text file.</td>
+<td><code>list files.txt size</code></td>
+</tr>
+<tr class="even">
+<td><code>findfiles</code></td>
+<td>Finds files matching a case-insensitive glob below the current
+directory.</td>
+<td><code>findfiles "*.lock"</code></td>
+</tr>
+<tr class="odd">
+<td><code>replace_extension</code></td>
+<td>Renames matching files in the current folder from one extension to
+another. <strong>Changes files.</strong></td>
+<td><code>replace_extension jpg.txt txt</code></td>
+</tr>
+<tr class="even">
+<td><code>replace_spaces</code></td>
+<td>Replaces spaces with underscores in filenames in one folder. Refuses
+to overwrite a collision.</td>
+<td><code>replace_spaces ~/Downloads</code></td>
+</tr>
+<tr class="odd">
+<td><code>replace_nordic_chars</code></td>
+<td>Replaces <code>äüõö</code>/uppercase equivalents in filenames with
+ASCII letters.</td>
+<td><code>replace_nordic_chars ~/Downloads</code></td>
+</tr>
+<tr class="even">
+<td><code>choicelist</code></td>
+<td>Turns piped lines into an interactive numbered choice menu.</td>
+<td><code>selected=$(printf '%s\n' *.mp3 | choicelist)</code></td>
+</tr>
+<tr class="odd">
+<td><code>syncit</code></td>
+<td>Copies newer files with <code>rsync</code>, retains destination
+extras, and writes a log in the source folder.</td>
+<td><code>syncit ~/Pictures /media/backup/Pictures</code></td>
+</tr>
+<tr class="even">
+<td><code>foldersize</code></td>
+<td>Shows the total size of one folder.</td>
+<td><code>foldersize ~/Downloads</code></td>
+</tr>
+<tr class="odd">
+<td><code>foldersizes</code></td>
+<td>Shows sizes of immediate subfolders, largest first.</td>
+<td><code>foldersizes ~/Downloads</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>list</code> supports these actions:</p>
+<div class="sourceCode" id="cb9"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ex">list</span> files.txt echo</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="ex">list</span> files.txt size</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="ex">list</span> files.txt basename</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="ex">list</span> files.txt dirname</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="ex">list</span> files.txt exists</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="ex">list</span> files.txt copy /tmp/backup</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="ex">list</span> files.txt move ~/Archive</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="ex">list</span> files.txt chmod 644</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="ex">list</span> files.txt exec sha256sum</span></code></pre></div>
+<blockquote>
+<p>[!CAUTION]<br />
+<code>list files.txt delete</code> deletes every listed path. Review the
+list first with <code>list files.txt echo</code>.</p>
+</blockquote>
+<h3 id="wait-until-helpers">Wait-until helpers</h3>
+<p>These are useful in automation scripts. Unless noted otherwise, they
+keep waiting until the condition becomes true; press <code>Ctrl+C</code>
+to cancel.</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>Waits for…</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>wait4download</code></td>
+<td>A Chromium <code>.crdownload</code> file to disappear and its final
+file to exist.</td>
+<td><code>wait4download ~/Downloads</code></td>
+</tr>
+<tr class="even">
+<td><code>wait4process_start</code></td>
+<td>An exact process name to start.</td>
+<td><code>wait4process_start firefox</code></td>
+</tr>
+<tr class="odd">
+<td><code>wait4process_stop</code></td>
+<td>An exact process name to stop.</td>
+<td><code>wait4process_stop firefox</code></td>
+</tr>
+<tr class="even">
+<td><code>wait4window</code></td>
+<td>A window title to appear under X11.</td>
+<td><code>wait4window "Telegram"</code></td>
+</tr>
+<tr class="odd">
+<td><code>wait4window_close</code></td>
+<td>A matching X11 window to close.</td>
+<td><code>wait4window_close "Telegram"</code></td>
+</tr>
+<tr class="even">
+<td><code>wait4file</code></td>
+<td>A path or glob to appear. Quote a glob if the shell must not expand
+it yet.</td>
+<td><code>wait4file "$HOME/Downloads/*.mp4"</code></td>
+</tr>
+<tr class="odd">
+<td><code>wait4file_gone</code></td>
+<td>All matching files to disappear.</td>
+<td><code>wait4file_gone "$HOME/Downloads/*.tmp"</code></td>
+</tr>
+<tr class="even">
+<td><code>wait4file_ready</code></td>
+<td>A file’s size to stabilize and for no process to hold it open.</td>
+<td><code>wait4file_ready render.mp4</code></td>
+</tr>
+<tr class="odd">
+<td><code>wait4file_gone_ext</code></td>
+<td>A named file pattern to disappear below a directory.</td>
+<td><code>wait4file_gone_ext ~/Downloads '*.crdownload'</code></td>
+</tr>
+<tr class="even">
+<td><code>wait4network</code></td>
+<td>Ping to <code>8.8.8.8</code> to succeed.</td>
+<td><code>wait4network</code></td>
+</tr>
+<tr class="odd">
+<td><code>wait4updates_apt</code></td>
+<td>Common APT/dpkg locks to be released.</td>
+<td><code>wait4updates_apt</code></td>
+</tr>
+<tr class="even">
+<td><code>wait4mount</code></td>
+<td>A path to become a mount point.</td>
+<td><code>wait4mount /media/usb</code></td>
+</tr>
+<tr class="odd">
+<td><code>wait4unmount</code></td>
+<td>A path to stop being a mount point.</td>
+<td><code>wait4unmount /media/usb</code></td>
+</tr>
+<tr class="even">
+<td><code>wait4cpu_idle</code></td>
+<td>Overall CPU use to fall below a percentage.</td>
+<td><code>wait4cpu_idle 15</code></td>
+</tr>
+<tr class="odd">
+<td><code>wait4app_idle</code></td>
+<td>One exact process’s CPU use to fall below a percentage.</td>
+<td><code>wait4app_idle kdenlive 5</code></td>
+</tr>
+<tr class="even">
+<td><code>wait4time</code></td>
+<td>The clock to reach <code>HH:MM</code>; if already past, it waits
+until that time the next day.</td>
+<td><code>wait4time 16:00</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="desktop-and-login-helpers">Desktop and login helpers</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>What it does</th>
+<th>Example or warning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>press</code></td>
+<td>Sends one or more key combinations to the focused X11 window.</td>
+<td><code>press ctrl+l BackSpace</code></td>
+</tr>
+<tr class="even">
+<td><code>type_into</code></td>
+<td>Types supplied text into the focused X11 window.</td>
+<td><code>type_into "Hello world"</code></td>
+</tr>
+<tr class="odd">
+<td><code>enter_text</code></td>
+<td>Same behavior as <code>type_into</code>.</td>
+<td><code>enter_text "Hello world"</code></td>
+</tr>
+<tr class="even">
+<td><code>screenoff</code></td>
+<td>Asks X11 DPMS to switch the display off.</td>
+<td><code>screenoff</code></td>
+</tr>
+<tr class="odd">
+<td><code>lockscreen</code></td>
+<td>Locks a Cinnamon desktop session.</td>
+<td><code>lockscreen</code></td>
+</tr>
+<tr class="even">
+<td><code>autologin</code></td>
+<td>Enables or disables automatic login for LightDM, GDM or SDDM. Backs
+up changed configuration. <strong>Needs sudo; reduces login
+security.</strong></td>
+<td><code>autologin "$USER" on</code></td>
+</tr>
+</tbody>
+</table>
+<p>For SDDM, a session can be supplied explicitly:</p>
+<div class="sourceCode" id="cb10"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ex">autologin</span> <span class="st">&quot;</span><span class="va">$USER</span><span class="st">&quot;</span> on plasma</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="ex">autologin</span> <span class="st">&quot;</span><span class="va">$USER</span><span class="st">&quot;</span> off</span></code></pre></div>
+<h2 id="text-and-number-processing">Text and number processing</h2>
+<h3 id="extracting-recognizable-data">Extracting recognizable data</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>Extracts</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>regex_email</code></td>
+<td>Email-like addresses.</td>
+<td><code>echo "Mail a@b.ee" | regex_email</code></td>
+</tr>
+<tr class="even">
+<td><code>regex_links_https</code></td>
+<td>HTTP and HTTPS links.</td>
+<td><code>cat page.html | regex_links_https</code></td>
+</tr>
+<tr class="odd">
+<td><code>regex_htmltag</code></td>
+<td>HTML opening/standalone tags.</td>
+<td><code>cat page.html | regex_htmltag</code></td>
+</tr>
+<tr class="even">
+<td><code>regex_ipaddress</code></td>
+<td>Valid IPv4 addresses with octets <code>0–255</code>.</td>
+<td><code>echo "Router: 192.168.1.1" | regex_ipaddress</code></td>
+</tr>
+<tr class="odd">
+<td><code>regex_price</code></td>
+<td>Digits and dots from each input line.</td>
+<td><code>echo 'Cost: $456.68' | regex_price</code></td>
+</tr>
+<tr class="even">
+<td><code>regex_number</code></td>
+<td>Runs of digits.</td>
+<td><code>echo "Room 12, floor 3" | regex_number</code></td>
+</tr>
+<tr class="odd">
+<td><code>regex_phonenumber</code></td>
+<td>Common international/local phone-number shapes.</td>
+<td><code>cat contacts.txt | regex_phonenumber</code></td>
+</tr>
+<tr class="even">
+<td><code>regex_date</code></td>
+<td><code>YYYY-MM-DD</code>, <code>DD.MM.YYYY</code> and similar
+formats.</td>
+<td><code>echo "14.05.2026" | regex_date</code></td>
+</tr>
+<tr class="odd">
+<td><code>regex_time</code></td>
+<td>Valid <code>HH:MM</code> or <code>HH:MM:SS</code> times.</td>
+<td><code>echo "At 18:04:59" | regex_time</code></td>
+</tr>
+<tr class="even">
+<td><code>regex_usernamehandle</code></td>
+<td>ASCII handles beginning with <code>@</code>.</td>
+<td><code>echo "Ask @artto" | regex_usernamehandle</code></td>
+</tr>
+<tr class="odd">
+<td><code>regex_hashtag</code></td>
+<td>ASCII hashtags beginning with <code>#</code>.</td>
+<td><code>echo "#Linux is nice" | regex_hashtag</code></td>
+</tr>
+<tr class="even">
+<td><code>regex_youtube_id</code></td>
+<td>An 11-character video ID from common YouTube URLs.</td>
+<td><code>echo '<a href="https://youtu.be/dQw4w9WgXcQ">https://youtu.be/dQw4w9WgXcQ</a>' | regex_youtube_id</code></td>
+</tr>
+<tr class="odd">
+<td><code>regex_sha256</code></td>
+<td>64-character hexadecimal SHA-256 values.</td>
+<td><code>sha256sum file.iso | regex_sha256</code></td>
+</tr>
+<tr class="even">
+<td><code>regex_bitcoin</code></td>
+<td>Legacy Bitcoin addresses beginning with <code>1</code> or
+<code>3</code>; it does not validate checksums or extract Bech32
+<code>bc1…</code> addresses.</td>
+<td><code>cat payment.txt | regex_bitcoin</code></td>
+</tr>
+<tr class="odd">
+<td><code>regex_uuid</code></td>
+<td>UUID-shaped identifiers.</td>
+<td><code>cat log.txt | regex_uuid</code></td>
+</tr>
+<tr class="even">
+<td><code>regex_sql</code></td>
+<td>Simple semicolon-terminated SELECT/INSERT/UPDATE/DELETE
+snippets.</td>
+<td><code>cat dump.txt | regex_sql</code></td>
+</tr>
+</tbody>
+</table>
+<p>These extractors recognize useful text patterns; they are not full
+validators for email ownership, phone reachability, cryptocurrency
+checksums, SQL grammar or calendar-valid dates.</p>
+<h3 id="cleaning-and-reshaping-text">Cleaning and reshaping text</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>What it does</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>sed_comma2dot</code></td>
+<td>Replaces every comma with a dot.</td>
+<td><code>echo 1,23 | sed_comma2dot</code></td>
+</tr>
+<tr class="even">
+<td><code>sed_dot2comma</code></td>
+<td>Replaces every dot with a comma.</td>
+<td><code>echo 1.23 | sed_dot2comma</code></td>
+</tr>
+<tr class="odd">
+<td><code>sed_space_removeextra</code></td>
+<td>Collapses repeated horizontal whitespace on each line.</td>
+<td><code>echo 'Too    many spaces' | sed_space_removeextra</code></td>
+</tr>
+<tr class="even">
+<td><code>sed_space_trim</code></td>
+<td>Removes whitespace at each line’s beginning and end.</td>
+<td><code>cat list.txt | sed_space_trim</code></td>
+</tr>
+<tr class="odd">
+<td><code>sed_space_removeall</code></td>
+<td>Removes all whitespace, including line breaks.</td>
+<td><code>cat code.txt | sed_space_removeall</code></td>
+</tr>
+<tr class="even">
+<td><code>sed_keep_textandnumbers</code></td>
+<td>Retains locale-recognized letters and digits.</td>
+<td><code>echo 'Õun #12!' | sed_keep_textandnumbers</code></td>
+</tr>
+<tr class="odd">
+<td><code>sed_keep_numbers</code></td>
+<td>Retains digits only.</td>
+<td><code>echo 'Order A-123' | sed_keep_numbers</code></td>
+</tr>
+<tr class="even">
+<td><code>sed_keep_price</code></td>
+<td>Retains digits and dots; alias-like equivalent of
+<code>regex_price</code>.</td>
+<td><code>echo '$12.50' | sed_keep_price</code></td>
+</tr>
+<tr class="odd">
+<td><code>sed_upper2lowercase</code></td>
+<td>Converts uppercase letters to lowercase using GNU sed.</td>
+<td><code>echo 'HELLO' | sed_upper2lowercase</code></td>
+</tr>
+<tr class="even">
+<td><code>sed_add2end</code></td>
+<td>Adds a literal suffix to every line.</td>
+<td><code>printf 'a\nb\n' | sed_add2end '.txt'</code></td>
+</tr>
+<tr class="odd">
+<td><code>sed_cleantext</code></td>
+<td>Removes common ANSI SGR color sequences.</td>
+<td><code>some_colored_command | sed_cleantext</code></td>
+</tr>
+<tr class="even">
+<td><code>regex_until</code></td>
+<td>Keeps the part before the first occurrence of literal text.</td>
+<td><code>echo 'name:details' | regex_until ':'</code></td>
+</tr>
+<tr class="odd">
+<td><code>regex_until_specialchar</code></td>
+<td>Same literal behavior as <code>regex_until</code>; retained for
+compatibility.</td>
+<td><code>echo 'one &amp; two' | regex_until_specialchar '&amp;'</code></td>
+</tr>
+<tr class="even">
+<td><code>regex_awk_seen</code></td>
+<td>Removes duplicate lines while preserving first-seen order.</td>
+<td><code>cat names.txt | regex_awk_seen</code></td>
+</tr>
+<tr class="odd">
+<td><code>regex_awk_sum</code></td>
+<td>Adds the first numeric field from every line.</td>
+<td><code>printf '4.52\n2\n' | regex_awk_sum</code></td>
+</tr>
+<tr class="even">
+<td><code>regex_awk_remove_betweenwords</code></td>
+<td>Removes text from the first literal start marker through the
+following end marker.</td>
+<td><code>echo 'A [hide]secret[/hide] B' | regex_awk_remove_betweenwords '[hide]' '[/hide]'</code></td>
+</tr>
+<tr class="odd">
+<td><code>regex_awk_keep_betweenwords</code></td>
+<td>Keeps the first literal start-to-end section, including
+markers.</td>
+<td><code>echo 'A [keep]yes[/keep] B' | regex_awk_keep_betweenwords '[keep]' '[/keep]'</code></td>
+</tr>
+<tr class="even">
+<td><code>regex_awk_removeprefixes</code></td>
+<td>Removes a line when it is an exact prefix of another longer input
+line.</td>
+<td><code>cat paths.txt | regex_awk_removeprefixes</code></td>
+</tr>
+<tr class="odd">
+<td><code>sed_keep_between_xml</code></td>
+<td>Extracts text between a simple matching XML tag on one line.</td>
+<td><code>echo '&lt;title&gt;News&lt;/title&gt;' | sed_keep_between_xml title</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="working-with-lines">Working with lines</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>What it does</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>sed_removelastline</code></td>
+<td>Deletes the final input line.</td>
+<td><code>cat list.txt | sed_removelastline</code></td>
+</tr>
+<tr class="even">
+<td><code>sed_removefirstline</code></td>
+<td>Deletes the first input line.</td>
+<td><code>cat list.txt | sed_removefirstline</code></td>
+</tr>
+<tr class="odd">
+<td><code>sed_keeplastword</code></td>
+<td>Keeps text following the final whitespace on each line.</td>
+<td><code>echo 'some final word' | sed_keeplastword</code></td>
+</tr>
+<tr class="even">
+<td><code>sed_addemptyline</code></td>
+<td>Adds a blank line after every input line.</td>
+<td><code>cat notes.txt | sed_addemptyline</code></td>
+</tr>
+<tr class="odd">
+<td><code>sed_removeemptylines</code></td>
+<td>Removes empty and whitespace-only lines.</td>
+<td><code>cat notes.txt | sed_removeemptylines</code></td>
+</tr>
+<tr class="even">
+<td><code>sed_joinlines</code></td>
+<td>Joins all lines with no separator.</td>
+<td><code>printf 'a\nb\n' | sed_joinlines</code></td>
+</tr>
+<tr class="odd">
+<td><code>sed_joinlines_commasep</code></td>
+<td>Joins lines with comma-space.</td>
+<td><code>printf 'a\nb\n' | sed_joinlines_commasep</code></td>
+</tr>
+<tr class="even">
+<td><code>sed_joinlines_semicolonsep</code></td>
+<td>Joins lines with semicolon-space.</td>
+<td><code>printf 'a\nb\n' | sed_joinlines_semicolonsep</code></td>
+</tr>
+<tr class="odd">
+<td><code>sed_keeplinesbetween</code></td>
+<td>Prints from the first line containing a literal start marker through
+a line beginning with the end marker.</td>
+<td><code>cat log.txt | sed_keeplinesbetween START END</code></td>
+</tr>
+<tr class="even">
+<td><code>sed_keeplines_after</code></td>
+<td>Keeps lines containing a marker with non-whitespace text after
+it.</td>
+<td><code>cat chat.txt | sed_keeplines_after '⟩ '</code></td>
+</tr>
+<tr class="odd">
+<td><code>sed_keepline</code></td>
+<td>Prints one positive-numbered line.</td>
+<td><code>cat file.txt | sed_keepline 2</code></td>
+</tr>
+<tr class="even">
+<td><code>sed_keeplinesrange</code></td>
+<td>Prints an inclusive line range.</td>
+<td><code>cat file.txt | sed_keeplinesrange 10 20</code></td>
+</tr>
+<tr class="odd">
+<td><code>sed_removeline</code></td>
+<td>Deletes one positive-numbered line.</td>
+<td><code>cat file.txt | sed_removeline 3</code></td>
+</tr>
+<tr class="even">
+<td><code>sed_removelinesrange</code></td>
+<td>Deletes an inclusive line range.</td>
+<td><code>cat file.txt | sed_removelinesrange 3 6</code></td>
+</tr>
+<tr class="odd">
+<td><code>row</code></td>
+<td>Keeps or deletes one line, an inclusive range, <code>first</code>,
+or <code>last</code>.</td>
+<td><code>cat file.txt | row keep 2,5</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="numbers-json-and-sorting">Numbers, JSON and sorting</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>What it does</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>regex_keep_number</code></td>
+<td>Extracts decimals that contain digits on both sides of a dot.</td>
+<td><code>echo 'Price 0.54' | regex_keep_number</code></td>
+</tr>
+<tr class="even">
+<td><code>regex_keep_numberof_decimals</code></td>
+<td>Extracts decimal numbers, retaining at most the selected decimal
+count.</td>
+<td><code>echo 0.24005 | regex_keep_numberof_decimals 2</code></td>
+</tr>
+<tr class="odd">
+<td><code>regex_jq</code></td>
+<td>Filters an array or object by exact-string (<code>=</code>) or regex
+(<code>~</code>) conditions and prints one field. Requires
+<code>jq</code>.</td>
+<td><code>cat people.json | regex_jq where status=active get name</code></td>
+</tr>
+<tr class="even">
+<td><code>sortdown_colnum</code></td>
+<td>Sorts comma-separated rows numerically by a column, most negative
+first.</td>
+<td><code>cat data.csv | sortdown_colnum 3</code></td>
+</tr>
+<tr class="odd">
+<td><code>sortup_colnum</code></td>
+<td>Sorts comma-separated rows numerically by a column, most positive
+first.</td>
+<td><code>cat data.csv | sortup_colnum 3</code></td>
+</tr>
+<tr class="even">
+<td><code>sortdown_abs_colnum</code></td>
+<td>Sorts by absolute numeric magnitude, closest to zero first.</td>
+<td><code>cat data.csv | sortdown_abs_colnum 3</code></td>
+</tr>
+<tr class="odd">
+<td><code>sortup_abs_colnum</code></td>
+<td>Sorts by absolute numeric magnitude, furthest from zero first.</td>
+<td><code>cat data.csv | sortup_abs_colnum 3</code></td>
+</tr>
+<tr class="even">
+<td><code>sort_col</code></td>
+<td>Sorts a comma-separated numeric or text column using
+<code>up</code>, <code>down</code>, <code>upabs</code> or
+<code>downabs</code>.</td>
+<td><code>cat data.csv | sort_col 2 up</code></td>
+</tr>
+<tr class="odd">
+<td><code>prefix_suffix_to_lines</code></td>
+<td>Reads a file and adds a prefix and optional suffix to each non-empty
+line.</td>
+<td><code>prefix_suffix_to_lines names.txt '<a href="https://example.com/">https://example.com/</a>' '.html'</code></td>
+</tr>
+</tbody>
+</table>
+<p>More <code>regex_jq</code> examples:</p>
+<div class="sourceCode" id="cb11"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span> items.json <span class="kw">|</span> <span class="ex">regex_jq</span> where id=79997538 get name</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span> items.json <span class="kw">|</span> <span class="ex">regex_jq</span> where <span class="st">&#39;name~1080p.*HEVC&#39;</span> get info_hash</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span> items.json <span class="kw">|</span> <span class="ex">regex_jq</span> where status=vip and seeders=5 get name</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span> items.json <span class="kw">|</span> <span class="ex">regex_jq</span> where status=vip or status=trial get name</span></code></pre></div>
+<h2 id="media-and-documents">Media and documents</h2>
+<p>Media conversion functions do not intentionally overwrite an existing
+output. When the source already has the target extension, names such as
+<code>_converted.mp4</code> are used.</p>
+<h3 id="audio-and-video">Audio and video</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>What it does</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>exa</code></td>
+<td>Extracts and re-encodes an audio interval as 192 kbit/s MP3,
+choosing the next <code>_clip_N.mp3</code> name.</td>
+<td><code>exa interview.mp3 00:14:17 00:19:22</code></td>
+</tr>
+<tr class="even">
+<td><code>exc</code></td>
+<td>Extracts an interval with stream copying, which is fast but may
+start at a nearby keyframe.</td>
+<td><code>exc video.mp4 00:01:00 00:02:30</code></td>
+</tr>
+<tr class="odd">
+<td><code>to_mp3</code></td>
+<td>Converts one or more audio files to stereo 256 kbit/s MP3.</td>
+<td><code>to_mp3 *.wav</code></td>
+</tr>
+<tr class="even">
+<td><code>to_mp4</code></td>
+<td>Converts video to H.264/AAC MP4 at a chosen video bitrate in
+kbit/s.</td>
+<td><code>to_mp4 3000 video.mov</code></td>
+</tr>
+<tr class="odd">
+<td><code>audio_removemetadata</code></td>
+<td>Atomically removes audio metadata, chapters and embedded artwork
+while retaining encoded audio. <strong>Replaces the original after
+success.</strong></td>
+<td><code>audio_removemetadata *.mp3</code></td>
+</tr>
+<tr class="even">
+<td><code>audiosync</code></td>
+<td>Creates <code>_synced.mp4</code> using the module’s fixed
+0.2666667-second offset.</td>
+<td><code>audiosync video.mp4</code></td>
+</tr>
+<tr class="odd">
+<td><code>to_gif</code></td>
+<td>Converts up to the first ten seconds of video to a 640-pixel-wide,
+15 fps GIF.</td>
+<td><code>to_gif clip.mp4</code></td>
+</tr>
+<tr class="even">
+<td><code>is_audio_playing</code></td>
+<td>Waits for PulseAudio playback, then calls <code>window close</code>
+for the detected application. <strong>This closes an application
+window.</strong></td>
+<td><code>is_audio_playing</code></td>
+</tr>
+<tr class="odd">
+<td><code>muteaudio</code></td>
+<td>Toggles mute for the default PulseAudio/PipeWire-Pulse output.</td>
+<td><code>muteaudio</code></td>
+</tr>
+<tr class="even">
+<td><code>ding</code></td>
+<td>Plays the standard desktop completion sound.</td>
+<td><code>ding</code></td>
+</tr>
+<tr class="odd">
+<td><code>ding_laptop_speakers</code></td>
+<td>Prefers an analog/laptop-speaker sink for the completion sound.</td>
+<td><code>ding_laptop_speakers</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="images-scanning-and-qr-codes">Images, scanning and QR codes</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>What it does</th>
+<th>Example or warning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>to_png</code></td>
+<td>Converts images to PNG; same-format input becomes
+<code>_converted.png</code>.</td>
+<td><code>to_png photo.jpg</code></td>
+</tr>
+<tr class="even">
+<td><code>to_jpg</code></td>
+<td>Converts images to JPEG and replaces transparency with white.</td>
+<td><code>to_jpg logo.png</code></td>
+</tr>
+<tr class="odd">
+<td><code>generateQR</code></td>
+<td>Creates <code>~/QR.png</code> from text or a URL.</td>
+<td><code>generateQR '<a href="https://qortal.dev">https://qortal.dev</a>'</code></td>
+</tr>
+<tr class="even">
+<td><code>scan_jpg</code></td>
+<td>Scans one 300-DPI color page into <code>~/Scanned</code> as
+JPEG.</td>
+<td><code>scan_jpg</code></td>
+</tr>
+<tr class="odd">
+<td><code>scan_pdf</code></td>
+<td>Scans one 300-DPI color page into <code>~/Scanned</code> as
+PDF.</td>
+<td><code>scan_pdf</code></td>
+</tr>
+<tr class="even">
+<td><code>OCR_recursively_alljpg2txt</code></td>
+<td>Creates Estonian OCR <code>.txt</code> files beside JPG/JPEG images
+recursively, skipping existing text.</td>
+<td><code>OCR_recursively_alljpg2txt</code></td>
+</tr>
+<tr class="odd">
+<td><code>resize50</code></td>
+<td>Recursively replaces matching images with atomically generated
+half-resolution versions. <strong>Changes originals.</strong></td>
+<td><code>resize50 jpg</code></td>
+</tr>
+<tr class="even">
+<td><code>jpg2txt_allincwd</code></td>
+<td>OCRs supplied files, or JPG/JPEG/PNG/PDF files in the current folder
+when no arguments are supplied.</td>
+<td><code>jpg2txt_allincwd *.jpg</code></td>
+</tr>
+<tr class="odd">
+<td><code>toclipboard</code></td>
+<td>Copies piped text, a PNG image, or a JPEG converted to PNG into the
+X11 clipboard.</td>
+<td><code>printf '%s\n' photo.png | toclipboard</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="pdf-and-office-documents">PDF and office documents</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>What it does</th>
+<th>Example or warning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>pdf_rotate_clockwise</code></td>
+<td>Creates <code>rotated_FILENAME.pdf</code> using Ghostscript.</td>
+<td><code>pdf_rotate_clockwise document.pdf</code></td>
+</tr>
+<tr class="even">
+<td><code>pdf_rotate_allinfolder_clockwise</code></td>
+<td>Atomically rotates every lowercase <code>*.pdf</code> in the current
+folder. <strong>Replaces originals after success.</strong></td>
+<td><code>pdf_rotate_allinfolder_clockwise</code></td>
+</tr>
+<tr class="odd">
+<td><code>pdf_compress_allinfolder</code></td>
+<td>Atomically compresses every lowercase <code>*.pdf</code> using
+Ghostscript <code>/screen</code> quality. <strong>Replaces originals and
+may reduce image quality.</strong></td>
+<td><code>pdf_compress_allinfolder</code></td>
+</tr>
+<tr class="even">
+<td><code>pdf2txt_OCR</code></td>
+<td>OCRs an image or every rendered page of a PDF into an adjacent
+<code>.txt</code> file using Estonian language data.</td>
+<td><code>pdf2txt_OCR scanned.pdf</code></td>
+</tr>
+<tr class="odd">
+<td><code>pdf2txt_OCR_allin</code></td>
+<td>Runs PDF OCR for every lowercase <code>*.pdf</code> in the current
+folder.</td>
+<td><code>pdf2txt_OCR_allin</code></td>
+</tr>
+<tr class="even">
+<td><code>xlsx2pdf</code></td>
+<td>Converts an Excel workbook to PDF with headless LibreOffice.</td>
+<td><code>xlsx2pdf budget.xlsx</code></td>
+</tr>
+<tr class="odd">
+<td><code>ods2xlsx</code></td>
+<td>Converts an OpenDocument spreadsheet to XLSX.</td>
+<td><code>ods2xlsx budget.ods</code></td>
+</tr>
+<tr class="even">
+<td><code>pdf2docx</code></td>
+<td>Asks LibreOffice to convert a PDF to DOCX in a chosen directory;
+results vary with PDF complexity.</td>
+<td><code>pdf2docx file.pdf ~/Documents</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="downloads">Downloads</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>What it does</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>yt-downloadthumbnail</code></td>
+<td>Extracts a YouTube video ID and downloads the best available
+standard thumbnail.</td>
+<td><code>yt-downloadthumbnail '<a href="https://youtu.be/dQw4w9WgXcQ">https://youtu.be/dQw4w9WgXcQ</a>'</code></td>
+</tr>
+<tr class="even">
+<td><code>wget_batch</code></td>
+<td>Downloads listed filenames below one base URL, from arguments or a
+text file. Rejects unsafe parent/absolute paths.</td>
+<td><code>wget_batch <a href="https://example.com/files">https://example.com/files</a> filelist.txt</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="screen-and-audio-recording">Screen and audio recording</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>What it does</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>get_default_resolution</code></td>
+<td>Prints the first preferred XRandR resolution. Mainly used
+internally.</td>
+<td><code>get_default_resolution</code></td>
+</tr>
+<tr class="even">
+<td><code>get_default_mic</code></td>
+<td>Prefers a Blue/Yeti input, otherwise prints the default PulseAudio
+source.</td>
+<td><code>get_default_mic</code></td>
+</tr>
+<tr class="odd">
+<td><code>get_default_audio_output_monitor</code></td>
+<td>Prints the default sink’s monitor source, with a fallback to the
+first monitor.</td>
+<td><code>get_default_audio_output_monitor</code></td>
+</tr>
+<tr class="even">
+<td><code>record_screen</code></td>
+<td>Starts background X11 screen recording with desktop audio and
+microphone into <code>~/Videos/*.mkv</code>.</td>
+<td><code>record_screen</code></td>
+</tr>
+<tr class="odd">
+<td><code>record_audio_output</code></td>
+<td>Records desktop audio into a WAV file in <code>~/Videos</code>.</td>
+<td><code>record_audio_output</code></td>
+</tr>
+<tr class="even">
+<td><code>record_audio_input</code></td>
+<td>Records the default microphone into a WAV file in
+<code>~/Videos</code>.</td>
+<td><code>record_audio_input</code></td>
+</tr>
+<tr class="odd">
+<td><code>record_stop</code></td>
+<td>Verifies stored recorder PIDs and sends FFmpeg <code>SIGINT</code>
+so files are finalized cleanly.</td>
+<td><code>record_stop</code></td>
+</tr>
+</tbody>
+</table>
+<p>Recorder functions require an X11/PulseAudio-compatible environment.
+PipeWire commonly works when its PulseAudio compatibility service is
+enabled.</p>
+<h2 id="gui-and-window-management">GUI and window management</h2>
+<p>These functions control X11 windows. A window name may match the
+window title or WM class depending on the function.</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>What it does</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>focus_window</code></td>
+<td>Activates the first visible window matching an X11 class.</td>
+<td><code>focus_window firefox</code></td>
+</tr>
+<tr class="even">
+<td><code>minimize_app</code></td>
+<td>Minimizes the first visible window whose title matches.</td>
+<td><code>minimize_app Firefox</code></td>
+</tr>
+<tr class="odd">
+<td><code>maximize_app</code></td>
+<td>Activates and resizes the first visible matching window to 100% ×
+100%.</td>
+<td><code>maximize_app Firefox</code></td>
+</tr>
+<tr class="even">
+<td><code>get_window_info</code></td>
+<td>Focuses a class and prints/stores its active window coordinates and
+size in <code>x</code>, <code>y</code>, <code>width</code>,
+<code>height</code>.</td>
+<td><code>get_window_info firefox</code></td>
+</tr>
+<tr class="odd">
+<td><code>screenshot_window</code></td>
+<td>Focuses a matching window and saves it under
+<code>~/Screen-shots</code>.</td>
+<td><code>screenshot_window firefox</code></td>
+</tr>
+<tr class="even">
+<td><code>get_window_info_titled</code></td>
+<td>Lists <code>wmctrl</code> windows containing literal title
+text.</td>
+<td><code>get_window_info_titled 'LibreOffice'</code></td>
+</tr>
+<tr class="odd">
+<td><code>screenshot_window_titled</code></td>
+<td>Captures the first window containing literal title text into
+<code>~/Screen-shots</code>.</td>
+<td><code>screenshot_window_titled 'Budget.ods'</code></td>
+</tr>
+<tr class="even">
+<td><code>window</code></td>
+<td>Focuses, closes, maximizes or minimizes a window via i3 or
+<code>wmctrl</code>.</td>
+<td><code>window focus Firefox</code></td>
+</tr>
+</tbody>
+</table>
+<p>Examples:</p>
+<div class="sourceCode" id="cb12"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="ex">window</span> maximize Firefox</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="ex">window</span> minimize Telegram</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="ex">window</span> close <span class="st">&quot;Untitled document&quot;</span></span></code></pre></div>
+<blockquote>
+<p>[!WARNING]<br />
+<code>window close …</code> asks the window manager to close the
+application. Unsaved work may be lost if the application does not prompt
+you.</p>
+</blockquote>
+<h2 id="fancy-terminal-output">Fancy Terminal output</h2>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>What it does</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>gradient_progress_bar</code></td>
+<td>Draws a 50-cell true-color bar for a percentage. Mainly an internal
+helper.</td>
+<td><code>gradient_progress_bar 75</code></td>
+</tr>
+<tr class="even">
+<td><code>gradient_in</code></td>
+<td>Prints text transitioning between two RGB colors. Mainly an internal
+helper.</td>
+<td><code>gradient_in 'Hello' 35 206 255 100 112 240</code></td>
+</tr>
+<tr class="odd">
+<td><code>gradient_text</code></td>
+<td>Prints text in the default blue-purple gradient.</td>
+<td><code>gradient_text 'Setup complete!'</code></td>
+</tr>
+<tr class="even">
+<td><code>wget_progressbar</code></td>
+<td>Downloads an HTTP/HTTPS URL while displaying a gradient percentage
+bar; returns failure when <code>wget</code> fails.</td>
+<td><code>wget_progressbar '<a href="https://example.com/archive.zip">https://example.com/archive.zip</a>'</code></td>
+</tr>
+</tbody>
+</table>
+<p>True-color output depends on the terminal and font; unsupported
+glyphs may appear differently.</p>
+<h2 id="rss-feeds">RSS feeds</h2>
+<p>These functions use <code>curl</code> and Python’s XML parser, so
+they support namespaced and minified RSS/Atom feeds and decode XML
+entities.</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>What it does</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>rss_youtube_lastvideo</code></td>
+<td>Shows the date and title of the newest video in a YouTube channel
+feed.</td>
+<td><code>rss_youtube_lastvideo UCDr1XkQaCr4IgrMVN0_28yg</code></td>
+</tr>
+<tr class="even">
+<td><code>rss_github_latestcommits</code></td>
+<td>Prints title/update fields from a GitHub branch’s Atom commit
+feed.</td>
+<td><code>rss_github_latestcommits arrrtto/bash.addins main</code></td>
+</tr>
+<tr class="odd">
+<td><code>rss_titles</code></td>
+<td>Prints all title/update fields from an HTTP/HTTPS RSS or Atom
+feed.</td>
+<td><code>rss_titles '<a href="https://trends.google.com/trending/rss">https://trends.google.com/trending/rss</a>'</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="cryptocurrency">Cryptocurrency</h2>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>What it does</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>crypto_fearandgreedindex</code></td>
+<td>Retrieves the current Alternative.me Crypto Fear &amp; Greed Index
+and classification.</td>
+<td><code>crypto_fearandgreedindex</code></td>
+</tr>
+</tbody>
+</table>
+<p>This index is general market sentiment information, not financial
+advice or a trading signal.</p>
+<h2 id="dependencies">Dependencies</h2>
+<p>The installer attempts to install the main packages on Debian-family
+systems and skips packages unavailable from enabled repositories. Many
+functions use standard GNU/Linux commands already present on most
+systems.</p>
+<p>Common dependency groups:</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Purpose</th>
+<th>Commands/packages commonly required</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Network and structured data</td>
+<td><code>curl</code>, <code>wget</code>, <code>jq</code>,
+<code>python3</code></td>
+</tr>
+<tr class="even">
+<td>Audio/video</td>
+<td><code>ffmpeg</code>, <code>sox</code></td>
+</tr>
+<tr class="odd">
+<td>Images and scanning</td>
+<td>ImageMagick (<code>convert</code>), <code>sane-utils</code>,
+<code>qrencode</code></td>
+</tr>
+<tr class="even">
+<td>OCR and PDFs</td>
+<td><code>tesseract-ocr</code>, Estonian Tesseract language data,
+<code>ghostscript</code>, <code>poppler-utils</code>,
+<code>pdftk</code>, MuPDF</td>
+</tr>
+<tr class="odd">
+<td>Office documents</td>
+<td>LibreOffice, <code>unoconv</code>, Python spreadsheet/ODF
+libraries</td>
+</tr>
+<tr class="even">
+<td>X11 desktop control</td>
+<td><code>xdotool</code>, <code>wmctrl</code>, <code>xclip</code>,
+<code>x11-apps</code>, <code>x11-xserver-utils</code></td>
+</tr>
+<tr class="odd">
+<td>Audio desktop control</td>
+<td><code>pactl</code>/<code>paplay</code> from
+<code>pulseaudio-utils</code> or compatible PipeWire services</td>
+</tr>
+<tr class="even">
+<td>Disk/system tools</td>
+<td><code>smartmontools</code>, <code>nvme-cli</code>,
+<code>rsync</code>, <code>lsof</code>, <code>psmisc</code>,
+<code>lsb-release</code></td>
+</tr>
+</tbody>
+</table>
+<p>If a function reports that a command is missing, install the named
+Debian package, or rerun the current BASH Addins installer after
+updating it.</p>
+<h2 id="getting-help">Getting help</h2>
+<p>Start with:</p>
+<div class="sourceCode" id="cb13"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="ex">showallfunctions</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="ex">showaliases</span></span></code></pre></div>
+<p>For bugs, feature requests or documentation improvements, use the
+project’s GitHub issue/discussion facilities or the contact details in
+<code>README.md</code>.</p>
+      </article>
+    </div>
+  </main>
+</body>
+</html>
