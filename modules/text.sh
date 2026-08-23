@@ -2,7 +2,7 @@
 
 # Text/Numbers processing module
 MODULE_NAME="text"
-MODULE_VERSION="1.09"
+MODULE_VERSION="1.2"
 MODULE_DESCRIPTION="Text processing and RegEx functions"
 
 
@@ -18,7 +18,7 @@ grep -E -o '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
 function regex_links_https() {
 # Extracts all https links addresses from input text.
 # Example: cat source.html | regex_links_https
-grep -E -o 'https?://[a-zA-Z0-9./?=_-]+'
+grep -E -o "https?://[^][(){}<>[:space:]\"']+" | sed -E 's/[.,;:!?]+$//'
 }
 
 
@@ -32,7 +32,15 @@ grep -E -o '<[a-zA-Z][a-zA-Z0-9]*[^>]*>'
 function regex_ipaddress() {
 # Extracts IP addresses from input text.
 # Example: some_text | regex_ipaddress
-grep -E -o '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b'
+grep -E -o '(^|[^0-9])([0-9]{1,3}\.){3}[0-9]{1,3}([^0-9]|$)' |
+awk '{
+  line=$0
+  gsub(/^[^0-9]|[^0-9]$/, "", line)
+  n=split(line, octet, ".")
+  valid=(n == 4)
+  for (i=1; i<=n; i++) if (octet[i] < 0 || octet[i] > 255) valid=0
+  if (valid) print line
+}'
 }
 
 
@@ -67,7 +75,7 @@ grep -E -o '[0-9]{4}[./-][0-9]{2}[./-][0-9]{2}|[0-9]{2}[./-][0-9]{2}[./-][0-9]{4
 function regex_time() {
 # Extracts time from input text.
 # Example: echo "2025-05-26T18:04:59+00:00" | regex_time → 18:04:59
-grep -E -o '[0-9]{2}:[0-9]{2}:[0-9]{2}?'
+grep -E -o '([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?'
 }
 
 
@@ -131,7 +139,7 @@ sed 's/,/./g'
 function sed_dot2comma() {
 # Replaces dots with commas in input text.
 # Example: echo "1.23" | sed_dot2comma    ; result: 1,23
-sed 's/./,/g'
+sed 's/\./,/g'
 }
 
 
@@ -156,7 +164,7 @@ sed ':a;N;$!ba;s/[[:space:]]//g'
 
 function sed_keep_textandnumbers() {
 # Filters out text characters and numbers from the input text.
-sed 's/[^a-zA-Z0-9]//g'
+sed 's/[^[:alnum:]]//g'
 }
 
 
@@ -187,7 +195,9 @@ function sed_add2end() {
 # Output:
 # Line1 [SUFFIX]
 # Line2 [SUFFIX]
-sed 's/$/ [SUFFIX]/'
+local suffix="${1:-}"
+[[ $# -eq 1 ]] || { echo "Usage: sed_add2end <suffix>" >&2; return 2; }
+awk -v suffix="$suffix" '{ print $0 suffix }'
 }
 
 
@@ -218,7 +228,7 @@ sed 'G'
 
 function sed_removeemptylines() {
 # Removes all blank/empty lines in the text input.
-sed '/./!d'
+sed '/^[[:space:]]*$/d'
 }
 
 
@@ -230,13 +240,13 @@ sed 's/\r//' | tr -d '\n' | sed 's/[ \t]*$//'
 
 function sed_joinlines_commasep() {
 # Removes \r, join lines with ", ", and removes trailing whitespaces.
-sed 's/\r//' | tr '\n' ', ' | sed 's/[ \t]*,$//'
+awk '{ sub(/\r$/, ""); lines[++n]=$0 } END { for (i=1;i<=n;i++) printf "%s%s", (i>1 ? ", " : ""), lines[i]; if (n) print "" }'
 }
 
 
 function sed_joinlines_semicolonsep() {
-# Removes \r, join lines with ", ", and removes trailing whitespaces.
-sed 's/\r//' | tr '\n' '; ' | sed 's/[ \t]*;$//'
+# Removes \r, joins lines with "; ", and removes the trailing separator.
+awk '{ sub(/\r$/, ""); lines[++n]=$0 } END { for (i=1;i<=n;i++) printf "%s%s", (i>1 ? "; " : ""), lines[i]; if (n) print "" }'
 }
 
 
@@ -256,9 +266,12 @@ function sed_keeplinesbetween() {
 # ----
 # cat file.txt | sed_keeplinesbetween Did ----
 if [ "$#" -ne 2 ]; then echo "Usage: sed_keeplinesbetween <start_word> <end_word>"; return 1; fi
-local start_word="$1"
-local end_word="$2"
-sed -n "/${start_word}/,/^${end_word}/!d" | sed "/^${end_word}/q"
+local start_word="$1" end_word="$2"
+awk -v start="$start_word" -v end="$end_word" '
+  !printing && index($0, start) { printing=1 }
+  printing { print }
+  printing && index($0, end) == 1 { exit }
+'
 }
 
 
@@ -269,7 +282,13 @@ echo "Keeps only lines with something after a certain character, for example ⟩
 echo "Usage example: sed_keeplines_after '⟩ '"
 return 1
 fi
-grep -E ".+$1[^[:space:]].+"
+local marker="$1"
+awk -v marker="$marker" '
+  {
+    pos=index($0, marker)
+    if (pos && substr($0, pos + length(marker)) ~ /[^[:space:]]/) print
+  }
+'
 }
 
 
@@ -277,6 +296,7 @@ function sed_keepline() {
 # Keeps only the certain row/line from the input text.
 if [ "$#" -ne 1 ]; then echo "Usage example: sed_keepline 2"; return 1; fi
 local rownumber="$1"
+[[ "$rownumber" =~ ^[1-9][0-9]*$ ]] || { echo "Line number must be a positive integer." >&2; return 2; }
 sed -n "${rownumber}p"
 }
 
@@ -285,6 +305,7 @@ function sed_keeplinesrange() {
 if [ "$#" -ne 2 ]; then echo "Usage: sed_keeplinesrange <start_line_number> <end_line_number>"; return 1; fi
 local start="$1"
 local end="$2"
+[[ "$start" =~ ^[1-9][0-9]*$ && "$end" =~ ^[1-9][0-9]*$ && start -le end ]] || { echo "Invalid line range." >&2; return 2; }
 sed -n "${start},${end}p"
 }
 
@@ -292,13 +313,8 @@ sed -n "${start},${end}p"
 function sed_removeline() {
 if [ "$#" -ne 1 ]; then echo "Usage: sed_removeline <line_number_number>"; return 1; fi
 local row="$1"
+[[ "$row" =~ ^[1-9][0-9]*$ ]] || { echo "Line number must be a positive integer." >&2; return 2; }
 sed "${row}d"
-}
-
-
-function sed_removelastline() {
-# Delete the last line
-sed '$d'
 }
 
 
@@ -307,6 +323,7 @@ function sed_removelinesrange() {
 if [ "$#" -ne 2 ]; then echo "Usage: sed_removelinesrange <start_line_number> <end_line_number>"; return 1; fi
 local start="$1"
 local end="$2"
+[[ "$start" =~ ^[1-9][0-9]*$ && "$end" =~ ^[1-9][0-9]*$ && start -le end ]] || { echo "Invalid line range." >&2; return 2; }
 sed "${start},${end}d"
 }
 
@@ -322,6 +339,10 @@ case "$spec" in
         last) spec="\$"
         ;;
 esac
+if [[ "$spec" != '\$' && ! "$spec" =~ ^[1-9][0-9]*(,[1-9][0-9]*)?$ ]]; then
+    echo "Invalid row specification: $2" >&2
+    return 2
+fi
 case "$mode" in
     keep)
         sed -n "${spec}p"
@@ -352,17 +373,18 @@ function regex_keep_numberof_decimals() {
 # Keeps only a selected number of decimals after dot (.)
 # Ex: echo "0.24005" | regex_keep_numberof_decimals 2
 # Output: 0.24
-local input
-read -r input
 local digits="${1:-2}"
-echo "$input" | grep -oE "^[0-9]+\.[0-9]{1,$digits}"
+[[ "$digits" =~ ^[1-9][0-9]*$ ]] || { echo "Decimal count must be a positive integer." >&2; return 2; }
+grep -oE "[0-9]+\.[0-9]{1,$digits}"
 }
 
 
 function regex_until() {
 # Deletes everything after a certain character.
 # Example: echo "helloXworld" | regex_until "X"    ->    Output: hello
-sed -e "s/$1.*//"
+local marker="${1:-}"
+[[ -n "$marker" ]] || { echo "Usage: regex_until <literal-text>" >&2; return 2; }
+awk -v marker="$marker" '{ pos=index($0, marker); print pos ? substr($0, 1, pos-1) : $0 }'
 }
 
 
@@ -370,7 +392,8 @@ function regex_until_specialchar() {
 # If input text contains special characters like / or &, then uses a different delimiter (| instead of /):
 # Example: echo "some text & with" | regex_until_specialchar '&'    ; Output: some text
 local char="$1"
-sed "s|$char.*||"
+[[ -n "$char" ]] || { echo "Usage: regex_until_specialchar <literal-text>" >&2; return 2; }
+awk -v marker="$char" '{ pos=index($0, marker); print pos ? substr($0, 1, pos-1) : $0 }'
 }
 
 
@@ -395,10 +418,18 @@ function regex_awk_remove_betweenwords() {
 # Removes a part of the input text, that is between two defined words.
 # Example: echo "This is some random text" | regex_awk_remove_betweenwords "This" "some"
 # outputs to " random text"
-local start=${1?Need the starting word and ending word}
-local start="$1"
-local end="$2"
-awk -v s="$start" -v e="$end" '{gsub(s ".*" e, ""); print}'
+[[ $# -eq 2 && -n "$1" && -n "$2" ]] || { echo "Usage: regex_awk_remove_betweenwords <start> <end>" >&2; return 2; }
+local start="$1" end="$2"
+awk -v s="$start" -v e="$end" '
+  {
+    a=index($0, s)
+    if (!a) { print; next }
+    rest=substr($0, a + length(s))
+    b=index(rest, e)
+    if (!b) { print; next }
+    print substr($0, 1, a-1) substr(rest, b + length(e))
+  }
+'
 }
 
 
@@ -406,10 +437,17 @@ function regex_awk_keep_betweenwords() {
 # Keeps a part of the input text, starting with the first word and ending with the second.
 # Example: echo "This is some random text" | regex_awk_keep_betweenwords "some" "text"
 # outputs to: "some random text", so it keeps the beginning word and the ending word also.
-local start=${1?Need the starting word and ending word}
-local start="$1"
-local end="$2"
-awk "{match(\$0, /$start .*?$end/, m); if (m[0]) print m[0]}"
+[[ $# -eq 2 && -n "$1" && -n "$2" ]] || { echo "Usage: regex_awk_keep_betweenwords <start> <end>" >&2; return 2; }
+local start="$1" end="$2"
+awk -v s="$start" -v e="$end" '
+  {
+    a=index($0, s)
+    if (!a) next
+    rest=substr($0, a)
+    b=index(rest, e)
+    if (b) print substr(rest, 1, b + length(e) - 1)
+  }
+'
 }
 
 
@@ -438,8 +476,17 @@ function sed_keep_between_xml() {
 # Keeps only the part of data between XML format data like <something>data</something>
 # Example: echo "<title>New video</title>" | sed_keep_betweenxmlwords "title"
 # outputs to: "New video"
-local start=${1?Need the word that is inside the <> brackets}
-grep -E "<$1>" | sed -E "s:.*<$1>(.*)</$1>.*:\1:"
+local tag="${1:-}"
+[[ "$tag" =~ ^[A-Za-z_][A-Za-z0-9_.:-]*$ ]] || { echo "Usage: sed_keep_between_xml <tag-name>" >&2; return 2; }
+awk -v opening="<$tag>" -v closing="</$tag>" '
+  {
+    a=index($0, opening)
+    if (!a) next
+    rest=substr($0, a + length(opening))
+    b=index(rest, closing)
+    if (b) print substr(rest, 1, b-1)
+  }
+'
 }
 
 
@@ -467,9 +514,11 @@ echo "cat some.json | regex_jq where username~jaja and status=vip or status=othe
 echo ""
 return 1
 fi
+command -v jq >/dev/null 2>&1 || { echo "regex_jq: jq is required" >&2; return 1; }
 local jq_expr=""
 local operator=""
 local get_field=""
+local condition cond_expr field value regex field_json value_json
 
 while [ "$#" -gt 0 ]; do
 case "$1" in
@@ -477,31 +526,33 @@ case "$1" in
         shift
         ;;
     and|or)
+        [[ -n "$jq_expr" && -z "$operator" ]] || { echo "Unexpected operator: $1" >&2; return 2; }
         operator="$1"
         shift
         ;;
     get)
+        [[ $# -ge 2 ]] || { echo "Missing field after get" >&2; return 2; }
         get_field="$2"
         shift 2
         ;;
     *)
-        local condition="$1"
+        condition="$1"
         shift
-        local cond_expr=""
+        cond_expr=""
         if [[ "$condition" == *"="* ]]; then
-            local field="${condition%%=*}"
-            local value="${condition#*=}"
-            cond_expr=".${field}==\"${value}\""
+            field="${condition%%=*}"
+            value="${condition#*=}"
+            [[ "$field" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || { echo "Invalid field: $field" >&2; return 2; }
+            field_json=$(jq -Rn --arg v "$field" '$v') || return 1
+            value_json=$(jq -Rn --arg v "$value" '$v') || return 1
+            cond_expr="(.[$field_json] == $value_json)"
         elif [[ "$condition" == *"~"* ]]; then
-            local field="${condition%%~*}"
-            local regex="${condition#*~}"
-            IFS='~' read -r -a regex_parts <<< "$regex"
-            local regex_cond=""
-            for r in "${regex_parts[@]}"; do
-            [[ -n "$regex_cond" ]] && regex_cond+=" and "
-            regex_cond=".${field} | test(\"$r\")"
-            done
-            cond_expr="$regex_cond"
+            field="${condition%%~*}"
+            regex="${condition#*~}"
+            [[ "$field" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || { echo "Invalid field: $field" >&2; return 2; }
+            field_json=$(jq -Rn --arg v "$field" '$v') || return 1
+            value_json=$(jq -Rn --arg v "$regex" '$v') || return 1
+            cond_expr="((.[$field_json] | tostring) | test($value_json))"
         else
         echo "Invalid condition: $condition"
         return 1
@@ -517,7 +568,10 @@ case "$1" in
 esac
 done
 if [ -z "$get_field" ]; then echo "No target field specified with get"; return 1; fi
-jq -r ".[] | select($jq_expr) | .${get_field}"
+[[ -n "$jq_expr" && -z "$operator" ]] || { echo "Incomplete where expression" >&2; return 2; }
+[[ "$get_field" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || { echo "Invalid target field: $get_field" >&2; return 2; }
+field_json=$(jq -Rn --arg v "$get_field" '$v') || return 1
+jq -r "(if type == \"array\" then .[] else . end) | select($jq_expr) | .[$field_json]"
 }
 
 
@@ -541,7 +595,8 @@ jq -r ".[] | select($jq_expr) | .${get_field}"
 function sortdown_colnum() {
 # Sorts input data by a specified column in descending numerical order.
 # Example: cat data.csv | sortdown_colnum 3    ; sorting based on the column number 3
-col="$1"
+local col="$1"
+[[ "$col" =~ ^[1-9][0-9]*$ ]] || { echo "Usage: sortdown_colnum <column-number>" >&2; return 2; }
 awk -F',' -v col="$col" '{ print $col "|" $0 }' | sort -t'|' -k1,1n | cut -d'|' -f2-
 }
 
@@ -549,7 +604,8 @@ awk -F',' -v col="$col" '{ print $col "|" $0 }' | sort -t'|' -k1,1n | cut -d'|' 
 function sortup_colnum() {
 # Sorts input data by a specified column in ascending numerical order.
 # Example: cat data.csv | sortup_colnum 3    ; sorting based on the column number 3
-col="$1"
+local col="$1"
+[[ "$col" =~ ^[1-9][0-9]*$ ]] || { echo "Usage: sortup_colnum <column-number>" >&2; return 2; }
 awk -F',' -v col="$col" '{ print $col "|" $0 }' | sort -t'|' -k1,1nr | cut -d'|' -f2-
 }
 
@@ -557,7 +613,8 @@ awk -F',' -v col="$col" '{ print $col "|" $0 }' | sort -t'|' -k1,1nr | cut -d'|'
 function sortdown_abs_colnum() {
 # Sorts input data by a specified column in descending order, treating negative values as positive.
 # Example: cat data.csv | sortdown_abs_colnum 3
-col="$1"
+local col="$1"
+[[ "$col" =~ ^[1-9][0-9]*$ ]] || { echo "Usage: sortdown_abs_colnum <column-number>" >&2; return 2; }
 awk -F',' -v col="$col" '{
   a = $col
   gsub(/-/, "", a)
@@ -569,7 +626,8 @@ awk -F',' -v col="$col" '{
 function sortup_abs_colnum() {
 # Sorts input data by a specified column in ascending order, treating negative values as positive.
 # Example: cat data.csv | sortup_abs_colnum 3
-col="$1"
+local col="$1"
+[[ "$col" =~ ^[1-9][0-9]*$ ]] || { echo "Usage: sortup_abs_colnum <column-number>" >&2; return 2; }
 awk -F',' -v col="$col" '{
   a = $col
   gsub(/-/, "", a)
@@ -583,8 +641,9 @@ function sort_col() {
 # Example: cat data.csv | sort_col 2 up
 # sort_col 2 up - sorts A-Z, if used non-numerical, but words
 # sort_col 2 down - sorts Z-A
-col="$1"
-mode="$2"
+local col="$1"
+local mode="$2"
+[[ "$col" =~ ^[1-9][0-9]*$ ]] || { echo "Usage: sort_col <column-number> <up|down|upabs|downabs>" >&2; return 2; }
 
 awk -F',' -v col="$col" '
 BEGIN { is_number=1 }
@@ -646,7 +705,9 @@ local inputfile="$1"
 local prefix="$2"
 local suffix="$3"
 
-while IFS= read -r line; do  # Keep empty lines unchanged
+[[ -r "$inputfile" ]] || { echo "Cannot read input file: $inputfile" >&2; return 1; }
+
+while IFS= read -r line || [[ -n "$line" ]]; do  # Also process a final line without a newline
 if [[ -z "$line" ]]; then
   printf '%s\n' ""
 else
@@ -654,6 +715,3 @@ else
 fi
 done < "$inputfile"
 }
-
-
-
