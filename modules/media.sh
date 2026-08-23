@@ -2,7 +2,7 @@
 
 # Media module
 MODULE_NAME="media"
-MODULE_VERSION="1.07"
+MODULE_VERSION="1.2"
 MODULE_DESCRIPTION="Audio/video/image processing functions"
 
 
@@ -18,17 +18,15 @@ function exa() {
         echo "Example: exa this.mp3 00:14:17 00:19:22"
         return 1
     fi
-    input="$1"
-    start="$2"
-    end="$3"
+    local input="$1" start="$2" end="$3" base counter out
+    [[ -f "$input" ]] || { echo "File not found: $input" >&2; return 1; }
     base="${input%.*}"   # Remove extension
-    ext="${input##*.}"   # Get extension
     counter=1
 
 # Find next available filename
     while [ -e "${base}_clip_${counter}.mp3" ]; do counter=$((counter + 1)); done
     out="${base}_clip_${counter}.mp3"
-    ffmpeg -i "$input" -ss "$start" -to "$end" -ar 44100 -ac 2 -ab 192k -f mp3 "$out"
+    ffmpeg -nostdin -hide_banner -i "$input" -ss "$start" -to "$end" -ar 44100 -ac 2 -b:a 192k -f mp3 "$out"
 }
 
 
@@ -41,9 +39,8 @@ function exc() {
         echo "Example: exc this.mp4 00:14:17 00:19:22"
         return 1
     fi
-    input="$1"
-    start="$2"
-    end="$3"
+    local input="$1" start="$2" end="$3" base ext counter out
+    [[ -f "$input" ]] || { echo "File not found: $input" >&2; return 1; }
     base="${input%.*}"   # Remove extension
     ext="${input##*.}"   # Get extension
     counter=1
@@ -51,18 +48,24 @@ function exc() {
 # Find next available filename
     while [ -e "${base}_clip_${counter}.${ext}" ]; do counter=$((counter + 1)); done
     out="${base}_clip_${counter}.${ext}"
-    ffmpeg -i "$input" -ss "$start" -to "$end" -c copy "$out"
+    ffmpeg -nostdin -hide_banner -i "$input" -ss "$start" -to "$end" -map 0 -c copy "$out"
 }
 
 
 function to_mp3() {
 # Converts input audio files to MP3 format with a bitrate of 256 kbps.
 # Example: to_mp3 *.wav
+[[ $# -gt 0 ]] || { echo "Usage: to_mp3 <audio-file> [...]" >&2; return 2; }
+local input_file output_file
 for input_file in "$@"; do
   if [ -f "$input_file" ]; then
-    local output_file="${input_file%.*}.mp3"  # Change to .mp3 based on input file extension
-    ffmpeg -i "$input_file" -ar 44100 -ac 2 -ab 256k -f mp3 "$output_file"
-    echo "Converted $input_file to $output_file"
+    output_file="${input_file%.*}.mp3"
+    [[ "$output_file" == "$input_file" ]] && output_file="${input_file%.*}_converted.mp3"
+    if ffmpeg -nostdin -hide_banner -n -i "$input_file" -ar 44100 -ac 2 -b:a 256k -f mp3 "$output_file"; then
+      echo "Converted $input_file to $output_file"
+    else
+      echo "Conversion failed: $input_file" >&2
+    fi
   else
     echo "No such file found: $input_file"
   fi
@@ -81,6 +84,7 @@ if [[ $# -lt 2 ]]; then
     return 1
 fi
 local bitrate="$1"
+[[ "$bitrate" =~ ^[1-9][0-9]*$ ]] || { echo "Bitrate must be a positive number in kbit/s." >&2; return 2; }
 shift  # Remove the first argument (bitrate) from the list of arguments
 local total="$#"
 local count=0
@@ -88,9 +92,13 @@ for file in "$@"; do
   if [ -f "$file" ]; then
      count=$((count + 1))
      local output="${file%.*}.mp4"
+     [[ "$output" == "$file" ]] && output="${file%.*}_converted.mp4"
      echo -ne "\r[$count/$total] Converting: $file -> $output"
-     ffmpeg -loglevel error -y -i "$file" -c:v libx264 -b:v "${bitrate}k" -c:a aac -strict experimental -b:a 256k "$output"
-     echo -ne "\r[$count/$total] Done:   $file -> $output\n"
+     if ffmpeg -nostdin -hide_banner -loglevel error -n -i "$file" -map 0:v:0 -map 0:a? -c:v libx264 -b:v "${bitrate}k" -c:a aac -b:a 256k -movflags +faststart "$output"; then
+       echo -ne "\r[$count/$total] Done:   $file -> $output\n"
+     else
+       echo -e "\n[$count/$total] Failed: $file" >&2
+     fi
   else
      echo "No such file found: $file"
   fi
@@ -114,13 +122,14 @@ for infile in "$@"; do
 if [[ ! -f "$infile" ]]; then echo "Skipping: File not found: $infile"; continue; fi
 
 ext="${infile##*.}"   # preserve extension
-tmpfile="$(mktemp --tmpdir="$(dirname "$infile")" clearmetadata.XXXXXX).$ext" || {
+tmpfile="$(mktemp --tmpdir="$(dirname "$infile")" --suffix=".$ext" .clearmetadata.XXXXXX)" || {
 echo "Error: Could not create temp file for $infile"
 continue
 }
 
 # Run ffmpeg to strip metadata
-if ffmpeg -i "$infile" -map_metadata -1 -c copy "$tmpfile" -y -loglevel error; then
+if ffmpeg -nostdin -hide_banner -i "$infile" -map 0:a? -map_metadata -1 -map_chapters -1 -c copy "$tmpfile" -y -loglevel error; then
+chmod --reference="$infile" "$tmpfile" 2>/dev/null || true
 mv -f "$tmpfile" "$infile"
 echo "Metadata cleared from: $infile"
 else
@@ -128,7 +137,6 @@ echo "Error: Failed to process $infile"
 rm -f "$tmpfile"
 fi
 done
-rm clearmetadata.*
 }
 
 
@@ -141,10 +149,11 @@ function audiosync() {
         echo "Usage example: audiosync this.mp4"
         return 1
     fi
-    input="$1"
+    local input="$1" base out
+    [[ -f "$input" ]] || { echo "File not found: $input" >&2; return 1; }
     base="${input%.*}"   # Remove extension
     out="${base}_synced.mp4"
-    ffmpeg -i "$input" -itsoffset 0.2666667 -i "$input" -map 1:v:0 -map 0:a:0 -c copy -map_metadata 0 -movflags +faststart "$out"
+    ffmpeg -nostdin -hide_banner -n -i "$input" -itsoffset 0.2666667 -i "$input" -map 1:v:0 -map 0:a:0 -c copy -map_metadata 0 -movflags +faststart "$out"
 }
 
 
@@ -168,9 +177,13 @@ for file in "$@"; do
 if [ -f "$file" ]; then
   count=$((count + 1))
   local output="${file%.*}.gif"
+  [[ "$output" == "$file" ]] && output="${file%.*}_converted.gif"
   echo "Converting '$file' to '$output'..."
-  ffmpeg -t 10 -i "$file" -vf "fps=15,scale=640:-1:flags=lanczos" "$output"
-  echo "Done: '$file' -> '$output'"
+  if ffmpeg -nostdin -hide_banner -n -t 10 -i "$file" -vf "fps=15,scale=640:-1:flags=lanczos" "$output"; then
+    echo "Done: '$file' -> '$output'"
+  else
+    echo "Failed: '$file'" >&2
+  fi
 else
   echo "No such file found: $file"
 fi
@@ -193,9 +206,10 @@ for file in "$@"; do
 if [ -f "$file" ]; then
   count=$((count + 1))
   local output="${file%.*}.png"
+  [[ "$output" == "$file" ]] && output="${file%.*}_converted.png"
+  if [[ -e "$output" ]]; then echo "Skipping: output already exists: $output" >&2; continue; fi
   echo "Converting '$file' to '$output'..."
-  convert "$file" "$output"
-  echo "Done: '$file' -> '$output'"
+  if convert "$file" "$output"; then echo "Done: '$file' -> '$output'"; else echo "Failed: '$file'" >&2; fi
 else
   echo "No such file found: $file"
 fi
@@ -218,9 +232,10 @@ for file in "$@"; do
 if [ -f "$file" ]; then
   count=$((count + 1))
   local output="${file%.*}.jpg"
+  [[ "$output" == "$file" ]] && output="${file%.*}_converted.jpg"
+  if [[ -e "$output" ]]; then echo "Skipping: output already exists: $output" >&2; continue; fi
   echo "Converting '$file' to '$output'..."
-  convert "$file" "$output"
-  echo "Done: '$file' -> '$output'"
+  if convert "$file" -background white -alpha remove -alpha off "$output"; then echo "Done: '$file' -> '$output'"; else echo "Failed: '$file'" >&2; fi
 else
   echo "No such file found: $file"
 fi
@@ -240,82 +255,157 @@ echo "For generating QR code out of any text or input. The generated QR-code ima
 echo "Usage example: generateQR \"https://qortal.dev\""
 return 1
 fi
-qrencode -o /home/$USER/QR.png -s 15 "$1"
-echo "Generated /home/$USER/QR.png"
+qrencode -o "$HOME/QR.png" -s 15 "$1"
+echo "Generated $HOME/QR.png"
 }
 
 
 function scan_jpg() {
 # Scans from a connected scanner into JPG image file.
 # Output files end up in Scanned folder (under your Home folder).
-mkdir -p /home/$USER/Scanned
-date_time=$(date +"%d.%m_%H:%M:%S")
-filename="/home/$USER/Scanned/$date_time"
-scanimage --resolution 300 --mode Color --format=pnm > /tmp/scanned_image.pnm
-sleep 1
-convert /tmp/scanned_image.pnm $filename.jpg
+local scan_dir="$HOME/Scanned" date_time filename tmpfile
+mkdir -p "$scan_dir" || return 1
+date_time=$(date +"%Y-%m-%d_%H-%M-%S_%N")
+filename="$scan_dir/$date_time.jpg"
+tmpfile=$(mktemp --suffix=.pnm) || return 1
+if scanimage --resolution 300 --mode Color --format=pnm > "$tmpfile" && convert "$tmpfile" "$filename"; then
+  echo "Saved: $filename"
+else
+  echo "Scan failed." >&2
+  rm -f -- "$tmpfile"
+  return 1
+fi
+rm -f -- "$tmpfile"
 }
 
 
 function scan_pdf() {
 # Scans from a connected scanner into PDF image file.
 # Output files end up in Scanned folder (under your Home folder).
-mkdir -p /home/$USER/Scanned
-date_time=$(date +"%d.%m_%H:%M:%S")
-failinimi="/home/$USER/Scanned/$date_time"
-scanimage --resolution 300 --mode Color --format=pnm > /tmp/scanned_image.pnm
-sleep 1
-convert /tmp/scanned_image.pnm $filename.pdf
+local scan_dir="$HOME/Scanned" date_time filename tmpfile
+mkdir -p "$scan_dir" || return 1
+date_time=$(date +"%Y-%m-%d_%H-%M-%S_%N")
+filename="$scan_dir/$date_time.pdf"
+tmpfile=$(mktemp --suffix=.pnm) || return 1
+if scanimage --resolution 300 --mode Color --format=pnm > "$tmpfile" && convert "$tmpfile" "$filename"; then
+  echo "Saved: $filename"
+else
+  echo "Scan failed." >&2
+  rm -f -- "$tmpfile"
+  return 1
+fi
+rm -f -- "$tmpfile"
 }
 
 
 function pdf_rotate_clockwise() {
 # Rotates a PDF file clockwise.
 # Example: pdf_rotate_clockwise "document.pdf"
-local file=${1?Usage example: pdf_rotate_clockwise "document.pdf"}
-gs -o "rotated_$1" -sDEVICE=pdfwrite -c "<</Orientation 3>> setpagedevice" -f "$1"
+local file="${1:-}" dir name output
+[[ -f "$file" ]] || { echo 'Usage: pdf_rotate_clockwise "document.pdf"' >&2; return 2; }
+dir=$(dirname "$file"); name=$(basename "$file")
+output="$dir/rotated_$name"
+[[ ! -e "$output" ]] || { echo "Output already exists: $output" >&2; return 1; }
+gs -q -o "$output" -sDEVICE=pdfwrite -c "<</Orientation 3>> setpagedevice" -f "$file"
 }
 
 
 function pdf_rotate_allinfolder_clockwise() {
 # Rotates all PDF files in the current folder clockwise.
 # Example: PDF_rotate_allinfolder_clockwise
-for file in *.pdf; do gs -o "$file" -sDEVICE=pdfwrite -c "<</Orientation 3>> setpagedevice" -f "$file"; done
+local file tmp nullglob_was_set=0
+shopt -q nullglob && nullglob_was_set=1
+shopt -s nullglob
+for file in *.pdf; do
+  tmp=$(mktemp --tmpdir=. --suffix=.pdf .pdfrotate.XXXXXX) || continue
+  if gs -q -o "$tmp" -sDEVICE=pdfwrite -c "<</Orientation 3>> setpagedevice" -f "$file"; then
+    chmod --reference="$file" "$tmp" 2>/dev/null || true
+    mv -- "$tmp" "$file"
+  else
+    echo "Failed to rotate: $file" >&2
+    rm -f -- "$tmp"
+  fi
+done
+(( nullglob_was_set )) || shopt -u nullglob
 }
 
 
 function pdf_compress_allinfolder() {
 # Compresses all PDF files in the current folder.
 # Example: PDF_compress_allinfolder
-for file in *.pdf; do gs -o "$file" -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/screen -c "<</Orientation 3>> setpagedevice" -f "$file"; done
+local file tmp nullglob_was_set=0
+shopt -q nullglob && nullglob_was_set=1
+shopt -s nullglob
+for file in *.pdf; do
+  tmp=$(mktemp --tmpdir=. --suffix=.pdf .pdfcompress.XXXXXX) || continue
+  if gs -q -o "$tmp" -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/screen -f "$file"; then
+    chmod --reference="$file" "$tmp" 2>/dev/null || true
+    mv -- "$tmp" "$file"
+  else
+    echo "Failed to compress: $file" >&2
+    rm -f -- "$tmp"
+  fi
+done
+(( nullglob_was_set )) || shopt -u nullglob
 }
 
 
 function pdf2txt_OCR() {
 # Extracts data from a PDF to a text file using OCR.
 # Example: pdf2txt_OCR "document.pdf"
-echo "Processing:" $1
-tesseract "$1" "$1.txt" -l est
-replace_extension jpg.txt.txt txt
+local file="${1:-}" output_base temp_dir temp_text page
+[[ -f "$file" ]] || { echo "Usage: pdf2txt_OCR <PDF-or-image-file>" >&2; return 2; }
+output_base="${file%.*}"
+echo "Processing: $file"
+if [[ "${file,,}" == *.pdf ]]; then
+  command -v pdftoppm >/dev/null 2>&1 || {
+    echo "pdf2txt_OCR: pdftoppm is required for PDF OCR (package: poppler-utils)" >&2
+    return 1
+  }
+  temp_dir=$(mktemp -d) || return 1
+  temp_text="$temp_dir/output.txt"
+  if ! pdftoppm -png -r 300 "$file" "$temp_dir/page" >/dev/null 2>&1; then
+    rm -rf -- "$temp_dir"
+    echo "Could not render PDF pages: $file" >&2
+    return 1
+  fi
+  : > "$temp_text"
+  for page in "$temp_dir"/page-*.png; do
+    tesseract "$page" stdout -l est 2>/dev/null >> "$temp_text" || {
+      rm -rf -- "$temp_dir"
+      return 1
+    }
+  done
+  mv -- "$temp_text" "${output_base}.txt" || { rm -rf -- "$temp_dir"; return 1; }
+  rm -rf -- "$temp_dir"
+else
+  temp_dir=$(mktemp -d) || return 1
+  if tesseract "$file" "$temp_dir/output" -l est && mv -- "$temp_dir/output.txt" "${output_base}.txt"; then
+    rm -rf -- "$temp_dir"
+  else
+    rm -rf -- "$temp_dir"
+    return 1
+  fi
+fi
 }
 
 
 function pdf2txt_OCR_allin() {
 # Extracts data from all PDF files in the current folder, to text files using OCR.
 # Example: pdf2txt_OCR_allin
-while IFS= read -r file; do
-echo "Processing:" $file
-output="${file%.*}.txt"   # $output will have a replaced extension
-tesseract "$file" "$output" -l est
-replace_extension txt.txt txt
-done
+local file nullglob_was_set=0
+shopt -q nullglob && nullglob_was_set=1
+shopt -s nullglob
+for file in *.pdf; do pdf2txt_OCR "$file"; done
+(( nullglob_was_set )) || shopt -u nullglob
 }
 
 
 function OCR_recursively_alljpg2txt() {
 # Creates .txt files of all found jpg files in current folder AND SUBFOLDERS!
 # Example: OCR_recursively_alljpg2txt
-find . -type f \( -iname '*.jpg' -o -iname '*.jpeg' \) | while IFS= read -r img; do
+local img txt
+while IFS= read -r -d '' img; do
 txt="${img%.*}.txt"
 if [[ ! -f "$txt" ]]; then
   echo "OCR: $img → $txt"
@@ -323,14 +413,14 @@ if [[ ! -f "$txt" ]]; then
 else
   echo "Skipped (already exists): $txt"
 fi
-done
+done < <(find . -type f \( -iname '*.jpg' -o -iname '*.jpeg' \) -print0)
 }
 
 
 function resize50() {
 # Resizes all image files in current folder AND ITS SUBFOLDERS to -50% image size by overwriting method, meaning shrinking the original images 50% in their resolution, without making any copies.
 # Example: resize50 jpg
-ext="$1"
+local ext="$1"
 if [[ -z "$ext" ]]; then
 echo "Resize (make 50% smaller) all jpg, png, webp or other images in current folder AND in the subfolders. NB! It does not create copies, but just overwrites the same images."
 echo "Usage example: resize50 jpg"
@@ -342,31 +432,41 @@ ext="${ext,,}" # Normalize input to lowercase
 
 case "$ext" in # Build extension patterns
   jpg)
-    exts=("*.jpg" "*.JPG" "*.jpeg" "*.JPEG")
+    local -a exts=("*.jpg" "*.jpeg")
     ;;
   png)
-    exts=("*.png" "*.PNG")
+    local -a exts=("*.png")
     ;;
   webp)
-    exts=("*.webp" "*.WEBP")
+    local -a exts=("*.webp")
     ;;
   *)
-    exts=("*.${ext}" "*.${ext^^}")
+    local -a exts=("*.${ext}")
     ;;
 esac
 
 # Build find command dynamically
-find_cmd=(find . -type f)
+local pattern
+local -a find_cmd=(find . -type f \()
 for pattern in "${exts[@]}"; do
 find_cmd+=(-iname "$pattern" -o)
 done
 unset 'find_cmd[${#find_cmd[@]}-1]'  # remove last -o
+find_cmd+=(\) -print0)
 
 # Run find and resize each matching file
-"${find_cmd[@]}" | while IFS= read -r img; do
+local img tmp
+while IFS= read -r -d '' img; do
 echo "Resizing: $img"
-convert "$img" -resize 50% "$img"
-done
+tmp=$(mktemp --tmpdir="$(dirname "$img")" --suffix=".${img##*.}" .resize50.XXXXXX) || continue
+if convert "$img" -resize 50% "$tmp"; then
+  chmod --reference="$img" "$tmp" 2>/dev/null || true
+  mv -- "$tmp" "$img"
+else
+  echo "Resize failed: $img" >&2
+  rm -f -- "$tmp"
+fi
+done < <("${find_cmd[@]}")
 }
 
 
@@ -374,8 +474,18 @@ function jpg2txt_allincwd() {
 # Extracts data into text files from image files or pdf files, inside the current folder.
 # Example: jpg2txt_allincwd *.pdf
 # Example: jpg2txt_allincwd *.jpg
-pattern="${1:-*.jpg}"       # Check if an argument is passed, otherwise default to *.jpg
-for f in $pattern; do pdf2txt_OCR "$f" "$f"; done   # Loop through the files based on the provided pattern
+local -a files
+local f nullglob_was_set=0
+if (( $# > 0 )); then
+  files=("$@")
+else
+  shopt -q nullglob && nullglob_was_set=1
+  shopt -s nullglob
+  files=(*.jpg *.jpeg *.png *.pdf)
+  (( nullglob_was_set )) || shopt -u nullglob
+fi
+(( ${#files[@]} > 0 )) || { echo "No matching image or PDF files found."; return 1; }
+for f in "${files[@]}"; do pdf2txt_OCR "$f"; done
 }
 
 
@@ -384,22 +494,29 @@ function toclipboard() {
 # Example for text: echo "Hello, World!" | toclipboard
 # Example for image: ls zoom.png | toclipboard
 
-input=$(cat) # Read input from stdin or a pipe
+local input temp ext
+temp=$(mktemp) || return 1
+cat > "$temp"
+input=$(<"$temp") # Command substitution is intentional for detecting a single file path.
 if [[ -f "$input" ]]; then # Check if the input is a file and exists
-case "$input" in
-    *.png)
+ext="${input##*.}"; ext="${ext,,}"
+case "$ext" in
+    png)
         xclip -selection clipboard -t image/png -i "$input"
         ;;
-    *.jpg | *.jpeg)
+    jpg|jpeg)
         convert "$input" png:- | xclip -selection clipboard -t image/png
         ;;
     *)
-        echo -n "$input" | xclip -selection clipboard  # Copy the file path to clipboard, if any other file type
+        printf '%s' "$input" | xclip -selection clipboard  # Copy the file path for other file types
         ;;
 esac
 else
-echo "$input" | xclip -selection clipboard   # If it's not a file, copy the input as plain text
+xclip -selection clipboard < "$temp"   # Preserve the original text, including trailing newlines.
 fi
+local rc=$?
+rm -f -- "$temp"
+return "$rc"
 }
 
 
@@ -408,11 +525,13 @@ fi
 function xlsx2pdf() {
 # Converts an excel file to PDF format using LibreOffice engine.
 # Example: xlsx2pdf "file.xlsx"
-local test=$(which libreoffice)
-if [[ $test != "" ]]; then
-libreoffice --headless --convert-to pdf "$1"
+local file="${1:-}"
+[[ -f "$file" ]] || { echo "Usage: xlsx2pdf <file.xlsx>" >&2; return 2; }
+if command -v libreoffice >/dev/null 2>&1; then
+libreoffice --headless --convert-to pdf -- "$file"
 else
 echo "Please make sure to have LibreOffice installed for this function to work."
+return 1
 fi
 }
 
@@ -420,11 +539,13 @@ fi
 function ods2xlsx() {
 # Converts an ODS file to XLSX format using LibreOffice engine.
 # Example: ods2xlsx "file.ods"
-local test=$(which libreoffice)
-if [[ $test != "" ]]; then
-libreoffice --headless --convert-to xlsx "$1"
+local file="${1:-}"
+[[ -f "$file" ]] || { echo "Usage: ods2xlsx <file.ods>" >&2; return 2; }
+if command -v libreoffice >/dev/null 2>&1; then
+libreoffice --headless --convert-to xlsx -- "$file"
 else
 echo "Please make sure to have LibreOffice installed for this function to work."
+return 1
 fi
 }
 
@@ -434,11 +555,13 @@ function pdf2docx() {
 # Example: pdf2docx file.pdf ~/Desktop/
 local file=${1?No input given for the file name}
 local folder=${2:-$(pwd)}  # Default to current directory if no output folder is provided
-local test=$(which libreoffice)
-if [[ $test != "" ]]; then
+if command -v libreoffice >/dev/null 2>&1; then
+[[ -f "$file" ]] || { echo "File not found: $file" >&2; return 1; }
+mkdir -p "$folder" || return 1
 libreoffice --headless --convert-to docx --outdir "$folder" "$file"
 else
 echo "Please make sure to have LibreOffice installed for this function to work."
+return 1
 fi
 }
 
@@ -451,12 +574,13 @@ function is_audio_playing() {
 # And if so, do something, e.g. close that window/application
 echo "Waiting for audio output..."
 while true; do
-audioapp=$(pactl list sink-inputs | awk -F\" '/application.process.binary/ {print $2}')  # get the name of the process playing audio
+local audioapp playtime
+audioapp=$(pactl list sink-inputs | awk -F\" '/application.process.binary/ {print $2; exit}')  # get the name of the process playing audio
 if [[ $audioapp != "" ]]; then  # if $audioapp is not empty, but something was found, then ...
 playtime=$(date | regex_time)
 echo "Audio detected from $audioapp at $playtime"
 sleep 2
-window close $audioapp  # In this case we could just close that process/app window to stop playing
+window close "$audioapp"  # In this case we could just close that process/app window to stop playing
 break
 fi
 sleep 1 && clear
@@ -481,14 +605,20 @@ echo "Function to download the thumbnail of the video from YouTube."
 echo "Usage example: yt-downloadthumbnail https://www.youtube.com/watch?v=vJabNEwZIuc"
 return 1
 fi
-ytid=$(echo $link | regex_youtube_id)
+local ytid quality thumbnail
+ytid=$(printf '%s\n' "$link" | regex_youtube_id)
+[[ "$ytid" =~ ^[A-Za-z0-9_-]{11}$ ]] || { echo "Could not extract a valid YouTube video ID." >&2; return 1; }
 for quality in "maxresdefault" "hq720" "sddefault"; do
 thumbnail="https://i.ytimg.com/vi/$ytid/${quality}.jpg"
 if wget -q --spider "$thumbnail"; then
-  wget -q "$thumbnail" -O "$ytid.jpg"
-  return
+  if wget -q "$thumbnail" -O "$ytid.jpg"; then
+    echo "Saved: $ytid.jpg"
+    return 0
+  fi
 fi
 done
+echo "No thumbnail was found for video ID $ytid." >&2
+return 1
 }
 
 
@@ -520,7 +650,12 @@ function wget_batch() {
     fi
 
     for filename in "${files[@]}"; do
+        if [[ -z "$filename" || "$filename" == /* || "$filename" == ../* || "$filename" == */../* || "$filename" == */.. ]]; then
+            echo "✘ Unsafe filename skipped: $filename" >&2
+            continue
+        fi
         local url="${baseurl%/}/$filename"
+        mkdir -p -- "$(dirname "$filename")" || continue
         if wget -q --spider "$url"; then
             wget -q "$url" -O "$filename"
             echo "✔ Saved $filename"
@@ -543,7 +678,7 @@ function get_default_resolution() {
 # Detect default microphone (prefer Blue Yeti, but if not found, take whatever is the default)
 function get_default_mic() {
   local mic
-  mic=$(pactl list short sources | grep -i 'blue\|yeti' | awk '{print $2}' | grep -E "input")
+  mic=$(pactl list short sources | awk 'BEGIN{IGNORECASE=1} /blue|yeti/ && /input/ {print $2; exit}')
   [[ -z "$mic" ]] && mic=$(pactl get-default-source)
   echo "$mic"
 }
@@ -551,74 +686,95 @@ function get_default_mic() {
 # Detect default desktop audio output monitor
 function get_default_audio_output_monitor() {
   local monitor
-  monitor=$(pactl list short sources | grep ".monitor" | head -n1 | awk '{print $2}')
+  local default_sink
+  default_sink=$(pactl get-default-sink 2>/dev/null)
+  monitor=$(pactl list short sources | awk -v sink="$default_sink" '$2 == sink ".monitor" {print $2; exit}')
+  [[ -z "$monitor" ]] && monitor=$(pactl list short sources | awk '$2 ~ /\.monitor$/ {print $2; exit}')
   echo "$monitor"
 }
 
 
 function record_screen() {
 # Function to record screen + mic + default audio output into mkv file
-  local reso=$(get_default_resolution)
-  local mic=$(get_default_mic)
-  local monitor=$(get_default_audio_output_monitor)
+  local reso mic monitor state_dir pid_file
+  reso=$(get_default_resolution)
+  mic=$(get_default_mic)
+  monitor=$(get_default_audio_output_monitor)
   local outfile="$HOME/Videos/record_$(date +%F_%H-%M-%S).mkv"
+
+  [[ -n "$reso" && -n "$mic" && -n "$monitor" ]] || { echo "Could not detect screen or audio sources." >&2; return 1; }
+  mkdir -p "$HOME/Videos" || return 1
+  state_dir="${XDG_RUNTIME_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/bash-addins}"
+  mkdir -p "$state_dir" || return 1
+  pid_file="$state_dir/record_screen.pid"
 
   echo "Recording screen ($reso)"
   echo "Mic: $mic"
   echo "Audio: $monitor"
 
-  nohup ffmpeg -f pulse -i "$monitor" -f pulse -i "$mic" -filter_complex amix=inputs=2:duration=first:dropout_transition=2 -f x11grab -r 30 -s "$reso" -i :0.0 -acodec aac -pix_fmt yuv420p -preset ultrafast -crf 25 -threads 12 "$outfile" >/dev/null 2>&1 &
-  echo $! > /tmp/record_screen.pid
+  nohup ffmpeg -nostdin -f pulse -i "$monitor" -f pulse -i "$mic" -filter_complex amix=inputs=2:duration=first:dropout_transition=2 -f x11grab -framerate 30 -video_size "$reso" -i "${DISPLAY:-:0.0}" -c:a aac -c:v libx264 -pix_fmt yuv420p -preset ultrafast -crf 25 "$outfile" >/dev/null 2>&1 &
+  printf '%s\n' "$!" > "$pid_file"
+  echo "Recording started: $outfile"
 }
 
 
 function record_audio_output() {
 # Function to record Desktop Audio only (output) into flac (or wav) file
-  local monitor=$(get_default_audio_output_monitor)
+  local monitor state_dir pid_file
+  monitor=$(get_default_audio_output_monitor)
   local outfile="$HOME/Videos/audio_output_$(date +%F_%H-%M-%S).wav"
 
+  [[ -n "$monitor" ]] || { echo "Could not detect desktop audio monitor." >&2; return 1; }
+  mkdir -p "$HOME/Videos" || return 1
+  state_dir="${XDG_RUNTIME_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/bash-addins}"
+  mkdir -p "$state_dir" || return 1
+  pid_file="$state_dir/record_audio.pid"
+
   echo "🎧 Recording Desktop Audio ($monitor) → $outfile"
-  nohup ffmpeg -f pulse -i "$monitor" -acodec pcm_s16le "$outfile" >/dev/null 2>&1 &
-  echo $! > /tmp/record_audio.pid
+  nohup ffmpeg -nostdin -f pulse -i "$monitor" -acodec pcm_s16le "$outfile" >/dev/null 2>&1 &
+  printf '%s\n' "$!" > "$pid_file"
   echo "Recording started."
 }
 
 function record_audio_input() {
 # Function to record only the default microphone (input) into flac (or wav) file
-  local mic=$(get_default_mic)
- local outfile="$HOME/Videos/audio_input_$(date +%F_%H-%M-%S).wav"
+  local mic state_dir pid_file
+  mic=$(get_default_mic)
+  local outfile="$HOME/Videos/audio_input_$(date +%F_%H-%M-%S).wav"
+
+  [[ -n "$mic" ]] || { echo "Could not detect microphone." >&2; return 1; }
+  mkdir -p "$HOME/Videos" || return 1
+  state_dir="${XDG_RUNTIME_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/bash-addins}"
+  mkdir -p "$state_dir" || return 1
+  pid_file="$state_dir/record_audio.pid"
 
   echo "🎤 Recording Microphone ($mic) → $outfile"
-  nohup ffmpeg -f pulse -i "$mic" -acodec pcm_s16le "$outfile" >/dev/null 2>&1 &
-  echo $! > /tmp/record_audio.pid
+  nohup ffmpeg -nostdin -f pulse -i "$mic" -acodec pcm_s16le "$outfile" >/dev/null 2>&1 &
+  printf '%s\n' "$!" > "$pid_file"
   echo "Recording started."
 }
 
 function record_stop() {
 # Function to stop screen recording and/or audio recording
-  if [[ -f /tmp/record_screen.pid ]]; then
-    PID=$(cat /tmp/record_screen.pid)
-    if kill "$PID" 2>/dev/null; then
+  local state_dir pid_file pid stopped=0
+  state_dir="${XDG_RUNTIME_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/bash-addins}"
+  for pid_file in "$state_dir/record_screen.pid" "$state_dir/record_audio.pid"; do
+    [[ -f "$pid_file" ]] || continue
+    pid=$(<"$pid_file")
+    if [[ "$pid" =~ ^[0-9]+$ ]] && ps -p "$pid" -o comm= 2>/dev/null | grep -qx ffmpeg && kill -INT "$pid" 2>/dev/null; then
+      stopped=1
+      rm -f -- "$pid_file"
+      if [[ "$pid_file" == *record_screen.pid ]]; then
       echo "🛑 Screen recording stopped."
-      rm -f /tmp/record_screen.pid
+      else
+        echo "🛑 Audio recording stopped."
+      fi
     else
-      echo "Could not stop screen recording (PID not found)."
+      echo "Stale or invalid recorder PID file removed: $pid_file" >&2
+      rm -f -- "$pid_file"
     fi
-  else
-    echo "No active screen recording found."
-  fi
-
-  if [[ -f /tmp/record_audio.pid ]]; then
-    PID=$(cat /tmp/record_audio.pid)
-    if kill "$PID" 2>/dev/null; then
-      echo "🛑 Audio recording stopped."
-      rm -f /tmp/record_audio.pid
-    else
-      echo "Could not stop audio recording (PID not found)."
-    fi
-  else
-    echo "No active audio recording found."
-  fi
+  done
+  (( stopped )) || echo "No active recording found."
 }
 
 
@@ -661,5 +817,3 @@ function ding_laptop_speakers() {
         return 1
     fi
 }
-
-
