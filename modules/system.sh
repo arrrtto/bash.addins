@@ -701,6 +701,352 @@ function diskhealth() {
 }
 
 
+function ramdrive() {
+    local mountpoint="/mnt/ramdrive"
+    local begin_marker="# BEGIN Bash-Addins ramdrive"
+    local end_marker="# END Bash-Addins ramdrive"
+
+    _ramdrive_usage() {
+        cat <<'EOF'
+Usage:
+  ramdrive create SIZE [permanent]
+  ramdrive mount
+  ramdrive unmount
+  ramdrive umount
+
+Examples:
+  ramdrive create 4GB
+  ramdrive create 4.5GB permanent
+  ramdrive mount
+  ramdrive unmount
+
+SIZE syntax:
+  A positive number followed by MB or GB.
+  Decimal fractions must use a period, not a comma.
+
+Valid:    512MB  4GB  4.5GB  0.5GB
+Invalid:  4,5GB  4A.5GB  4.5  4GiB
+
+Notes:
+  - The default mount point is /mnt/ramdrive
+  - MB and GB are interpreted as MiB and GiB.
+  - 'permanent' means mounted automatically at boot.
+  - Contents always disappear after unmounting or rebooting.
+  - The drive is mounted noswap, nosuid, nodev and noexec.
+EOF
+    }
+
+    _ramdrive_is_mounted() {
+        mountpoint -q "$mountpoint"
+    }
+
+    _ramdrive_show() {
+        findmnt "$mountpoint"
+        df -h "$mountpoint"
+        ls -ld "$mountpoint"
+    }
+
+    local action="${1:-}"
+
+    case "$action" in
+        "")
+            _ramdrive_usage
+            return 0
+            ;;
+
+        create)
+            local requested_size="${2:-}"
+            local persistence="${3:-}"
+            local normalized number unit bytes
+            local mem_available mem_total reserve usable
+            local user_uid user_gid
+            local temp_fstab backup_name
+            local permanent=0
+
+            if [[ -z "$requested_size" ]]; then
+                printf 'Error: a size is required.\n\n' >&2
+                _ramdrive_usage
+                return 2
+            fi
+
+            if [[ -n "${4:-}" ]]; then
+                printf 'Error: too many arguments.\n\n' >&2
+                _ramdrive_usage
+                return 2
+            fi
+
+            if [[ -n "$persistence" ]]; then
+                if [[ "$persistence" == "permanent" ]]; then
+                    permanent=1
+                else
+                    printf 'Error: expected "permanent", got: %s\n' \
+                        "$persistence" >&2
+                    return 2
+                fi
+            fi
+
+            normalized="${requested_size^^}"
+
+            if [[ ! "$normalized" =~ ^([1-9][0-9]*|0\.[0-9]+|[1-9][0-9]*\.[0-9]+)(MB|GB)$ ]]; then
+                printf 'Error: invalid size: %s\n' "$requested_size" >&2
+                printf 'Use forms such as 512MB, 4GB or 4.5GB.\n' >&2
+                return 2
+            fi
+
+            number="${normalized::-2}"
+            unit="${normalized: -2}"
+
+            bytes="$(
+                awk -v number="$number" -v unit="$unit" '
+                    BEGIN {
+                        multiplier = unit == "GB" ? 1073741824 : 1048576
+                        printf "%.0f\n", number * multiplier
+                    }
+                '
+            )"
+
+            if [[ ! "$bytes" =~ ^[0-9]+$ ]] || (( bytes < 1048576 )); then
+                printf 'Error: calculated RAM-drive size is invalid.\n' >&2
+                return 2
+            fi
+
+            mem_available="$(
+                awk '
+                    $1 == "MemAvailable:" {
+                        printf "%.0f\n", $2 * 1024
+                    }
+                ' /proc/meminfo
+            )"
+
+            mem_total="$(
+                awk '
+                    $1 == "MemTotal:" {
+                        printf "%.0f\n", $2 * 1024
+                    }
+                ' /proc/meminfo
+            )"
+
+            if [[ -z "$mem_available" || -z "$mem_total" ]]; then
+                printf 'Error: unable to determine available memory.\n' >&2
+                return 1
+            fi
+
+            # Preserve at least 1 GiB, or 10% of physical RAM if greater.
+            reserve=$(( mem_total / 10 ))
+
+            if (( reserve < 1073741824 )); then
+                reserve=1073741824
+            fi
+
+            if (( mem_available > reserve )); then
+                usable=$(( mem_available - reserve ))
+            else
+                usable=0
+            fi
+
+            printf 'Requested maximum: %s\n' \
+                "$(numfmt --to=iec-i --suffix=B "$bytes")"
+            printf 'Available memory:  %s\n' \
+                "$(numfmt --to=iec-i --suffix=B "$mem_available")"
+            printf 'Safety reserve:    %s\n' \
+                "$(numfmt --to=iec-i --suffix=B "$reserve")"
+
+            if (( bytes > usable )); then
+                printf '\nError: insufficient safely usable RAM.\n' >&2
+                printf 'Maximum allowed now: %s\n' \
+                    "$(numfmt --to=iec-i --suffix=B "$usable")" >&2
+                return 1
+            fi
+
+            if (( EUID == 0 )); then
+                printf 'Error: run ramdrive as your normal user, not root.\n' >&2
+                return 1
+            fi
+
+            user_uid="$(id -u)"
+            user_gid="$(id -g)"
+
+            if _ramdrive_is_mounted; then
+                printf '\n%s is currently mounted.\n' "$mountpoint"
+                printf 'Remounting will permanently discard everything in it.\n'
+                read -r -p 'Continue? [y/N] ' answer
+
+                if [[ ! "$answer" =~ ^[Yy]$ ]]; then
+                    printf 'Cancelled.\n'
+                    return 0
+                fi
+            fi
+
+            printf '\nAdministrator permission is required.\n'
+
+            if ! sudo -v; then
+                printf 'Error: sudo authentication failed.\n' >&2
+                return 1
+            fi
+
+            if _ramdrive_is_mounted; then
+                if ! sudo umount "$mountpoint"; then
+                    printf 'Error: the RAM drive is busy.\n' >&2
+                    printf 'Open files can be inspected with:\n' >&2
+                    printf '  sudo lsof +D %q\n' "$mountpoint" >&2
+                    return 1
+                fi
+            fi
+
+            sudo mkdir -p "$mountpoint"
+
+            if (( permanent )); then
+                temp_fstab="$(mktemp)" || return 1
+                backup_name="/etc/fstab.ramdrive-backup.$(date +%Y%m%d-%H%M%S)"
+
+                # Remove a previous function-managed block and any older
+                # standalone entry for this exact mount point.
+                awk \
+                    -v begin="$begin_marker" \
+                    -v end="$end_marker" \
+                    -v mp="$mountpoint" '
+                    $0 == begin {
+                        managed = 1
+                        next
+                    }
+
+                    $0 == end {
+                        managed = 0
+                        next
+                    }
+
+                    managed {
+                        next
+                    }
+
+                    /^[[:space:]]*#/ {
+                        print
+                        next
+                    }
+
+                    $2 == mp {
+                        next
+                    }
+
+                    {
+                        print
+                    }
+                ' /etc/fstab > "$temp_fstab"
+
+                {
+                    printf '\n%s\n' "$begin_marker"
+                    printf 'tmpfs %s tmpfs rw,size=%s,noswap,mode=0700,uid=%s,gid=%s,nosuid,nodev,noexec 0 0\n' \
+                        "$mountpoint" "$bytes" "$user_uid" "$user_gid"
+                    printf '%s\n' "$end_marker"
+                } >> "$temp_fstab"
+
+                if ! sudo cp --preserve=all /etc/fstab "$backup_name"; then
+                    rm -f "$temp_fstab"
+                    printf 'Error: unable to back up /etc/fstab.\n' >&2
+                    return 1
+                fi
+
+                if ! sudo install -o root -g root -m 0644 \
+                    "$temp_fstab" /etc/fstab; then
+                    rm -f "$temp_fstab"
+                    printf 'Error: unable to update /etc/fstab.\n' >&2
+                    return 1
+                fi
+
+                rm -f "$temp_fstab"
+
+                if ! sudo mount "$mountpoint"; then
+                    printf 'Error: fstab was updated, but mounting failed.\n' >&2
+                    printf 'Backup: %s\n' "$backup_name" >&2
+                    return 1
+                fi
+
+                printf '\nPermanent RAM drive created successfully.\n'
+                printf 'fstab backup: %s\n\n' "$backup_name"
+            else
+                if ! sudo mount -t tmpfs \
+                    -o "size=$bytes,noswap,mode=0700,uid=$user_uid,gid=$user_gid,nosuid,nodev,noexec" \
+                    tmpfs "$mountpoint"; then
+                    printf 'Error: unable to mount RAM drive.\n' >&2
+                    return 1
+                fi
+
+                printf '\nTemporary RAM drive created successfully.\n'
+                printf 'It will not be recreated automatically after reboot.\n\n'
+            fi
+
+            _ramdrive_show
+            ;;
+
+        mount)
+            if _ramdrive_is_mounted; then
+                printf '%s is already mounted.\n\n' "$mountpoint"
+                _ramdrive_show
+                return 0
+            fi
+
+            if ! awk -v mp="$mountpoint" '
+                /^[[:space:]]*#/ { next }
+                $2 == mp { found=1 }
+                END { exit !found }
+            ' /etc/fstab; then
+                printf 'Error: no permanent ramdrive configuration exists.\n' >&2
+                printf 'Create one first, for example:\n' >&2
+                printf '  ramdrive create 4.5GB permanent\n' >&2
+                return 1
+            fi
+
+            printf 'Administrator permission is required.\n'
+
+            if ! sudo -v || ! sudo mount "$mountpoint"; then
+                printf 'Error: unable to mount %s.\n' "$mountpoint" >&2
+                return 1
+            fi
+
+            printf '\nRAM drive mounted successfully.\n\n'
+            _ramdrive_show
+            ;;
+
+        unmount|umount)
+            if ! _ramdrive_is_mounted; then
+                printf '%s is not mounted.\n' "$mountpoint"
+                return 0
+            fi
+
+            printf 'Everything currently in %s will be lost.\n' "$mountpoint"
+            read -r -p 'Unmount it? [y/N] ' answer
+
+            if [[ ! "$answer" =~ ^[Yy]$ ]]; then
+                printf 'Cancelled.\n'
+                return 0
+            fi
+
+            printf 'Administrator permission is required.\n'
+
+            if ! sudo -v || ! sudo umount "$mountpoint"; then
+                printf 'Error: unable to unmount the RAM drive.\n' >&2
+                printf 'Check open files with:\n' >&2
+                printf '  sudo lsof +D %q\n' "$mountpoint" >&2
+                return 1
+            fi
+
+            printf '%s unmounted. Its contents are gone.\n' "$mountpoint"
+            ;;
+
+        help|-h|--help)
+            _ramdrive_usage
+            ;;
+
+        *)
+            printf 'Error: unknown action: %s\n\n' "$action" >&2
+            _ramdrive_usage
+            return 2
+            ;;
+    esac
+
+}
+
+
 
 
 function process_check() {
